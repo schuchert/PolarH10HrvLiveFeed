@@ -1,4 +1,4 @@
-# HRV Live Pipeline (Polar H10 → OBS)
+# PolarH10HrvLiveFeed — HRV Live Pipeline (Polar H10 → OBS)
 
 Pipeline: **Polar H10 (BLE)** → RR stream → HRV calc → graph (browser) → OBS.
 
@@ -11,6 +11,8 @@ python3 -m venv .venv
 source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements-dev.txt
 ```
+
+**If you moved or renamed the project** and get errors like `bad interpreter` or `no such file or directory` from `.venv`, delete the old venv and recreate it: `rm -rf .venv` then run the commands above again.
 
 ## Run tests
 

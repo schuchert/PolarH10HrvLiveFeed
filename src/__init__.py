@@ -1,1 +1,1 @@
-# HRV pipeline: BLE stream, HRV calc, graph server
+# PolarH10HrvLiveFeed: BLE stream, HRV calc, graph server

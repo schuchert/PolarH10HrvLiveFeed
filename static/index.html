@@ -7,12 +7,18 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; }
-    body {
+    html, body {
       margin: 0;
+      height: 100%;
+    }
+    body {
       font-family: system-ui, sans-serif;
       padding: 12px;
       color: #e0e0e0;
       background: #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     body.transparent { background: transparent; color: #fff; }
     .header {
@@ -21,6 +27,7 @@
       gap: 24px;
       flex-wrap: wrap;
       margin-bottom: 8px;
+      flex-shrink: 0;
     }
     .live-value {
       display: flex;
@@ -33,7 +40,11 @@
     .live-value.hr .num { color: #f9a8d4; }
     .status { font-size: 0.85rem; opacity: 0.7; }
     canvas { display: block; max-width: 100%; }
-    .chart-wrap { position: relative; height: 220px; }
+    .chart-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 180px;
+    }
   </style>
 </head>
 <body>

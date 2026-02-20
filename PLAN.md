@@ -161,7 +161,7 @@ Then open `http://localhost:8765` and add that as Browser Source in OBS.
 ## 9. Files / repo layout (suggestion)
 
 ```
-HRV/
+PolarH10HrvLiveFeed/
   README.md           # How to run, deps, OBS setup
   PLAN.md             # This file
   requirements.txt    # bleak, aiohttp (or fastapi+uvicorn), numpy
