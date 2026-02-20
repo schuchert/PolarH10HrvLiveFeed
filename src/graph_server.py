@@ -29,6 +29,9 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 # Max data points to keep and send to new clients
 MAX_HISTORY = 300
+# Bounded queue so slow WebSocket clients can't block the pipeline
+BROADCAST_QUEUE_MAXSIZE = 500
+BROADCAST_SEND_TIMEOUT = 2.0
 
 
 def _ts():
@@ -144,6 +147,8 @@ def main():
     app["data_file"] = [None]
     app["data_file_path"] = [None]
     app["data_file_lock"] = asyncio.Lock()
+    app["last_printed_count"] = [0]  # avoid duplicate "Received N lines" messages
+    app["broadcast_queue"] = asyncio.Queue(maxsize=BROADCAST_QUEUE_MAXSIZE)
 
     app.router.add_get("/", handle_index)
     app.router.add_get("/status", handle_status)
@@ -160,7 +165,8 @@ def main():
             n = app["stdin_count"][0]
             if n == 1:
                 print(_ts() + "Receiving data from pipeline (first line).", file=sys.stderr)
-            elif n % 50 == 0 and n > 0:
+            elif n % 50 == 0 and n > app["last_printed_count"][0]:
+                app["last_printed_count"][0] = n
                 print(_ts() + f"Received {n} lines from pipeline.", file=sys.stderr)
             history.append(line)
             if len(history) > MAX_HISTORY:
@@ -185,11 +191,25 @@ def main():
                     )
                 if new_path is not None:
                     print(_ts() + f"Session data file: {new_path}", file=sys.stderr)
+            # Don't block on WebSocket send; slow clients would stall the pipeline
+            try:
+                app["broadcast_queue"].put_nowait(line)
+            except asyncio.QueueFull:
+                pass  # drop this broadcast; file and history already updated
+
+    async def broadcast_worker(app):
+        """Send lines to WebSocket clients with timeout so one slow client can't block the pipeline."""
+        queue = app["broadcast_queue"]
+        while True:
+            try:
+                line = await queue.get()
+            except asyncio.CancelledError:
+                break
             dead = set()
-            for ws in app["websockets"]:
+            for ws in list(app["websockets"]):
                 try:
-                    await ws.send_str(line)
-                except Exception:
+                    await asyncio.wait_for(ws.send_str(line), timeout=BROADCAST_SEND_TIMEOUT)
+                except (asyncio.TimeoutError, Exception):
                     dead.add(ws)
             for ws in dead:
                 app["websockets"].discard(ws)
@@ -216,7 +236,8 @@ def main():
             daemon=True,
         )
         t.start()
-        app["broadcast_task"] = asyncio.create_task(consume_queue())
+        app["consume_task"] = asyncio.create_task(consume_queue())
+        app["broadcast_task"] = asyncio.create_task(broadcast_worker(app))
         asyncio.create_task(warn_if_no_data(app))
 
     async def close_data_file(app):
