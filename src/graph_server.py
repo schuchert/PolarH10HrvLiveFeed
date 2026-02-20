@@ -120,15 +120,16 @@ def main():
                 app["websockets"].discard(ws)
 
     async def warn_if_no_data(app):
-        """After 10s, if we have WS clients but zero stdin lines, print a warning."""
-        await asyncio.sleep(10)
-        if app["stdin_count"][0] == 0 and len(app["websockets"]) > 0:
+        """After 90s, if we still have zero stdin lines, print a warning. (hrv_calc needs ~30 RR intervals before it emits, so 10s was too soon.)"""
+        await asyncio.sleep(90)
+        if app["stdin_count"][0] == 0:
             print(
-                _ts() + "\n*** No data received on stdin. Run the FULL pipeline in ONE terminal:\n"
+                _ts() + "\n*** No data received on stdin after 90s. Run the FULL pipeline in ONE terminal:\n"
                 "  PYTHONPATH=. python -m src.polar_h10_stream | \\\n"
                 "  PYTHONPATH=. python -m src.hrv_calc | \\\n"
                 "  PYTHONPATH=. python -m src.graph_server --port 8765\n"
-                "Then open http://localhost:8765 (do not start graph_server by itself).\n",
+                "Then open http://localhost:8765 (do not start graph_server by itself).\n"
+                "Normally HRV data appears within 1–2 minutes once the pipeline is running.\n",
                 file=sys.stderr,
             )
 

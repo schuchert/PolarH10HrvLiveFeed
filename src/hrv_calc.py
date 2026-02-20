@@ -68,6 +68,9 @@ def _run(
                 buffer.popleft()
         rr_list = [b[0] for b in buffer]
         if len(rr_list) < min_intervals:
+            # Not enough for RMSSD yet — emit HR so graph shows heart rate immediately
+            out = {"hr": hr, "rmssd_ms": None, "hrv_score": None, "ts": ts}
+            print(json.dumps(out), flush=True)
             continue
         try:
             rms = rmssd_ms(rr_list)
