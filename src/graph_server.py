@@ -80,18 +80,21 @@ async def handle_ws(request: web.Request) -> web.StreamResponse:
                 obj = json.loads(msg.data)
             except (json.JSONDecodeError, TypeError):
                 continue
-            if obj.get("event") != "region":
-                continue
-            region = obj.get("region")
+            event = obj.get("event")
             ts = obj.get("ts")
-            if not region:
+            if event == "region":
+                region = obj.get("region")
+                if not region:
+                    continue
+                request.app["current_region"] = region
+                line = json.dumps({"event": "region", "region": region, "ts": ts}) + "\n"
+            elif event == "restart":
+                line = json.dumps({"event": "restart", "ts": ts}) + "\n"
+            else:
                 continue
-            request.app["current_region"] = region
-            # Append region marker to session data file
             async with request.app["data_file_lock"]:
                 f = request.app.get("data_file")
                 if f is not None and not f.closed:
-                    line = json.dumps({"event": "region", "region": region, "ts": ts}) + "\n"
                     f.write(line)
                     f.flush()
     finally:

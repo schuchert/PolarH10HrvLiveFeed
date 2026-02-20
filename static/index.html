@@ -32,7 +32,7 @@
       gap: 0;
     }
     .header-left { display: flex; align-items: center; gap: 24px; }
-    .header-center { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .header-center { display: grid; grid-template-columns: repeat(6, auto) 1fr auto; gap: 6px; align-items: center; justify-content: start; }
     .header-center button {
       font-size: 0.8rem;
       padding: 6px 10px;
@@ -87,13 +87,15 @@
         <span class="num" id="hrVal">--</span>
       </div>
     </div>
-    <div class="header-center" id="regionButtons">
+    <div class="header-center" id="headerCenterGrid">
       <button type="button" data-category="0">Shaking</button>
       <button type="button" data-category="1">Deep Flex</button>
       <button type="button" data-category="2">Stretching</button>
       <button type="button" data-category="3">Isometrics</button>
       <button type="button" data-category="4">Yoga</button>
       <button type="button" data-category="5">Warmup</button>
+      <span></span>
+      <button type="button" id="restartBtn">Restart</button>
     </div>
     <div class="header-right">
       <div><span class="label">Start</span> <span class="value" id="startTime">--</span></div>
@@ -387,7 +389,18 @@
         ws.send(JSON.stringify({ event: 'region', region: region, ts: Date.now() / 1000 }));
       }
     }
-    document.getElementById('regionButtons').addEventListener('click', (e) => {
+    function restartCurrentExercise() {
+      sectionStartMs = Date.now();
+      if (sectionTimeEl) sectionTimeEl.textContent = '0:00';
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: 'restart', ts: Date.now() / 1000 }));
+      }
+    }
+    document.getElementById('headerCenterGrid').addEventListener('click', (e) => {
+      if (e.target.closest('#restartBtn')) {
+        restartCurrentExercise();
+        return;
+      }
       const btn = e.target.closest('button[data-category]');
       if (!btn) return;
       const categoryIndex = parseInt(btn.getAttribute('data-category'), 10);
