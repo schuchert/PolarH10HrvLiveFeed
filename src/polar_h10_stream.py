@@ -114,6 +114,11 @@ async def _run(
     reconnect_count = 0
     while True:
         device = None
+        # After sleep, Bluetooth often needs extra time; use longer wait before first reconnect
+        if reconnect_count > 0:
+            delay = 15.0 if reconnect_count == 1 else reconnect_delay
+            print(_ts() + f"Connection lost. Waiting {delay:.0f}s before reconnect (Bluetooth may need a moment after sleep)...", file=sys.stderr)
+            await asyncio.sleep(delay)
         for attempt in range(scan_retries):
             device = await _find_device(device_name)
             if device is not None:
@@ -179,8 +184,6 @@ async def _run(
             if max_reconnects > 0 and reconnect_count >= max_reconnects:
                 print(_ts() + f"Connection lost. Max reconnects ({max_reconnects}) reached. Exiting.", file=sys.stderr)
                 return 1
-            print(_ts() + f"Connection lost: {e}. Reconnecting in {reconnect_delay:.0f}s...", file=sys.stderr)
-            await asyncio.sleep(reconnect_delay)
     return 0
 
 

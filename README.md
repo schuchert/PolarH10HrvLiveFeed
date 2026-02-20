@@ -49,7 +49,7 @@ You should see `# connected` then JSON lines on stdout, e.g.:
 
 Press Ctrl+C to stop.
 
-**Auto-reconnect:** If the BLE link drops, the stream process will try to reconnect automatically (after 5s by default). Use `--reconnect-delay 0` to disable, or `--max-reconnects N` to limit attempts.
+**Auto-reconnect:** If the BLE link drops (e.g. laptop sleep), the stream will wait 15s before the first reconnect (to give Bluetooth time to recover), then rescan and reconnect. Later reconnects use `--reconnect-delay` (default 5s). Use `--reconnect-delay 0` to disable, or `--max-reconnects N` to limit attempts.
 
 **macOS**: Grant Bluetooth access when prompted. The first time you run, ensure no other app is connected to the H10 (e.g. Polar Beat disconnected).
 

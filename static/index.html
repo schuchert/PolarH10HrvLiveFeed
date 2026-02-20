@@ -192,10 +192,11 @@
       statusEl.style.color = isError ? '#fca5a5' : '';
     }
 
-    function connect() {
-      hasReceivedData = false;
-      ws = new WebSocket(wsUrl);
-      ws.onopen = async () => {
+    function connect(isReconnect) {
+      if (isReconnect) hasReceivedData = false;
+      const socket = new WebSocket(wsUrl);
+      ws = socket;
+      socket.onopen = async () => {
         setStatus('Connected — checking pipeline…');
         try {
           const r = await fetch('/status');
@@ -213,17 +214,18 @@
           if (!hasReceivedData) setStatus('Connected — waiting for data…');
         }
       };
-      ws.onclose = () => {
+      socket.onclose = () => {
+        if (ws !== socket) return;
         setStatus('Disconnected. Reconnecting in ' + (reconnectDelayMs / 1000) + 's…');
         stopSessionClock();
         clearTimeout(reconnectTimeout);
         reconnectTimeout = setTimeout(() => {
           setStatus('Reconnecting…');
-          connect();
+          connect(true);
         }, reconnectDelayMs);
       };
-      ws.onerror = () => { setStatus('WebSocket error. Reconnecting…', true); };
-      ws.onmessage = onWsMessage;
+      socket.onerror = () => { setStatus('WebSocket error. Reconnecting…', true); };
+      socket.onmessage = onWsMessage;
     }
 
     let hasReceivedData = false;
@@ -260,25 +262,29 @@
       chart.update('none');
     }
 
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-      if (ws && ws.readyState === WebSocket.OPEN) return;
+    function tryReconnect() {
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
       clearTimeout(reconnectTimeout);
       reconnectTimeout = null;
+      if (ws) {
+        try { ws.close(); } catch (_) {}
+        ws = null;
+      }
       setStatus('Reconnecting…');
-      connect();
+      connect(true);
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      tryReconnect();
     });
 
     setInterval(() => {
       if (document.visibilityState !== 'visible') return;
-      if (ws && ws.readyState === WebSocket.OPEN) return;
-      clearTimeout(reconnectTimeout);
-      reconnectTimeout = null;
-      setStatus('Reconnecting…');
-      connect();
+      tryReconnect();
     }, 5000);
 
-    connect();
+    connect(false);
   </script>
 </body>
 </html>
