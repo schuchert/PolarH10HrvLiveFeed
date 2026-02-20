@@ -17,6 +17,7 @@ import asyncio
 import json
 import queue
 import sys
+import traceback
 import time
 from datetime import datetime
 
@@ -33,6 +34,11 @@ def _ts():
     return f"[{datetime.now().strftime('%H:%M:%S')}] "
 
 
+def _verbose(quiet: bool, msg: str, file=sys.stderr):
+    if not quiet:
+        print(_ts() + msg, file=file, flush=True)
+
+
 # GATT Heart Rate Measurement characteristic (standard 16-bit UUID)
 HRM_CHAR_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
 
@@ -41,7 +47,7 @@ def _on_hrm(sender_handle: int, data: bytes, err_stream, first_packet_reported: 
     try:
         if not first_packet_reported:
             first_packet_reported.append(True)
-            print(_ts() + "Received first HRM packet.", file=err_stream, flush=True)
+            print(_ts() + "Received first HRM packet.", file=err_stream, flush=True)  # always log for diagnosis
         parsed = parse_hrm(data)
         hr = parsed["hr"]
         rr_list = parsed["rr_ms"]
@@ -58,17 +64,20 @@ def _on_hrm(sender_handle: int, data: bytes, err_stream, first_packet_reported: 
         print(json.dumps({"error": str(e)}), file=err_stream, flush=True)
 
 
-async def _find_device(device_name: str | None):
+async def _find_device(device_name: str | None, quiet: bool):
     """Resolve device name to a BleakDevice. Returns None if not found."""
     if device_name:
+        _verbose(quiet, f"Looking for device by name: {device_name!r}")
         device = await BleakScanner.find_device_by_name(device_name)
         if device is None:
             print(_ts() + f"No device named '{device_name}' found.", file=sys.stderr)
             return None
+        _verbose(quiet, f"Found device: {device.name} ({device.address})")
         return device
     print(_ts() + "Scanning for Polar H10 (2 min)...", file=sys.stderr)
     devices = await BleakScanner.discover(timeout=120.0)
     polar = [d for d in devices if d.name and "Polar H10" in d.name]
+    _verbose(quiet, f"Scan complete: {len(devices)} device(s) total, {len(polar)} Polar H10.")
     if not polar:
         print(_ts() + "No Polar H10 found.", file=sys.stderr)
         return None
@@ -77,7 +86,9 @@ async def _find_device(device_name: str | None):
     return device
 
 
-def _print_scan_tips():
+def _print_scan_tips(quiet: bool):
+    if quiet:
+        return
     print(
         _ts() + "Tips: Strap on & moisten electrodes; disconnect Polar Beat / other apps from H10; check Bluetooth is on.",
         file=sys.stderr,
@@ -91,6 +102,7 @@ async def _run(
     max_reconnects: int,
     scan_retries: int,
     scan_retry_delay: float,
+    quiet: bool,
 ):
     first_packet = []
     hrm_queue = queue.Queue()
@@ -118,20 +130,23 @@ async def _run(
         if reconnect_count > 0:
             delay = 15.0 if reconnect_count == 1 else reconnect_delay
             print(_ts() + f"Connection lost. Waiting {delay:.0f}s before reconnect (Bluetooth may need a moment after sleep)...", file=sys.stderr)
+            _verbose(quiet, f"Reconnect attempt {reconnect_count} (max={'unlimited' if max_reconnects <= 0 else max_reconnects})")
             await asyncio.sleep(delay)
         for attempt in range(scan_retries):
-            device = await _find_device(device_name)
+            _verbose(quiet, f"Scan attempt {attempt + 1}/{scan_retries}")
+            device = await _find_device(device_name, quiet)
             if device is not None:
                 break
             if attempt < scan_retries - 1:
-                _print_scan_tips()
+                _print_scan_tips(quiet)
                 print(_ts() + f"Retrying scan in {scan_retry_delay:.0f}s ({attempt + 2}/{scan_retries})...", file=sys.stderr)
                 await asyncio.sleep(scan_retry_delay)
         if device is None:
-            _print_scan_tips()
+            _print_scan_tips(quiet)
             return 1
 
         print(_ts() + f"Connecting (timeout {connect_timeout:.0f}s)...", file=sys.stderr)
+        _verbose(quiet, f"Connecting to {device.name} at {device.address}")
         drain_task = None
         try:
             async with BleakClient(device, timeout=connect_timeout) as client:
@@ -177,12 +192,15 @@ async def _run(
                     await drain_task
                 except asyncio.CancelledError:
                     pass
+            print(_ts() + f"Connection lost: {e}", file=sys.stderr)
+            if not quiet:
+                traceback.print_exc(file=sys.stderr)
             if reconnect_delay <= 0:
-                print(_ts() + f"Connection lost: {e}. Exiting (reconnect disabled).", file=sys.stderr)
+                print(_ts() + "Exiting (reconnect disabled).", file=sys.stderr)
                 return 1
             reconnect_count += 1
             if max_reconnects > 0 and reconnect_count >= max_reconnects:
-                print(_ts() + f"Connection lost. Max reconnects ({max_reconnects}) reached. Exiting.", file=sys.stderr)
+                print(_ts() + f"Max reconnects ({max_reconnects}) reached. Exiting.", file=sys.stderr)
                 return 1
     return 0
 
@@ -220,11 +238,16 @@ def main():
         default=15.0,
         help="Seconds to wait between scan retries (default 15).",
     )
+    parser.add_argument(
+        "-q", "--quiet",
+        action="store_true",
+        help="Quiet mode: less diagnostic logging (no scan counts, no tracebacks).",
+    )
     args = parser.parse_args()
     try:
         exit(asyncio.run(_run(
             args.device, args.connect_timeout, args.reconnect_delay, args.max_reconnects,
-            args.scan_retries, args.scan_retry_delay,
+            args.scan_retries, args.scan_retry_delay, args.quiet,
         )))
     except KeyboardInterrupt:
         print(_ts() + "Stopped.", file=sys.stderr)

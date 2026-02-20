@@ -10,12 +10,16 @@ else
   PYTHON="${PYTHON:-python3}"
 fi
 
+mkdir -p "$ROOT/logs"
+LOG="$ROOT/logs/$(date +%Y-%m-%d_%H-%M-%S).log.txt"
 echo "Keeping system awake (caffeinate -di). Pipeline: polar_h10_stream | hrv_calc | graph_server --port 8765"
 echo "Open http://localhost:8765 — Ctrl+C to stop."
+echo "Log: $LOG"
 echo ""
 
-exec caffeinate -di env \
+( exec caffeinate -di env \
   PYTHONPATH="$ROOT" \
   "$PYTHON" -m src.polar_h10_stream \
   | env PYTHONPATH="$ROOT" "$PYTHON" -m src.hrv_calc \
   | env PYTHONPATH="$ROOT" "$PYTHON" -m src.graph_server --port 8765
+) 2>&1 | tee "$LOG"
