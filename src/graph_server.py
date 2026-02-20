@@ -86,14 +86,14 @@ async def handle_ws(request: web.Request) -> web.StreamResponse:
                 region = obj.get("region")
                 if not region:
                     continue
-                request.app["current_region"] = region
+                request.app["current_region"][0] = region
                 line = json.dumps({"event": "region", "region": region, "ts": ts}) + "\n"
             elif event == "restart":
                 line = json.dumps({"event": "restart", "ts": ts}) + "\n"
             else:
                 continue
             async with request.app["data_file_lock"]:
-                f = request.app.get("data_file")
+                f = request.app["data_file"][0]
                 if f is not None and not f.closed:
                     f.write(line)
                     f.flush()
@@ -113,9 +113,9 @@ def main():
     app["history"] = []  # list of JSON strings
     app["queue"] = asyncio.Queue()
     app["stdin_count"] = [0]  # mutable so stdin_reader can increment
-    app["current_region"] = None
-    app["data_file"] = None
-    app["data_file_path"] = None
+    app["current_region"] = [None]  # [0] mutated at runtime to avoid aiohttp deprecation
+    app["data_file"] = [None]
+    app["data_file_path"] = [None]
     app["data_file_lock"] = asyncio.Lock()
 
     app.router.add_get("/", handle_index)
@@ -141,21 +141,21 @@ def main():
             # Append to session data file (ts, hr, rmssd_ms, hrv_score, region)
             try:
                 obj = json.loads(line)
-                obj["region"] = app["current_region"]
+                obj["region"] = app["current_region"][0]
                 out_line = json.dumps(obj) + "\n"
             except (json.JSONDecodeError, TypeError):
                 out_line = None
             if out_line is not None:
                 async with app["data_file_lock"]:
-                    if app["data_file"] is None:
+                    if app["data_file"][0] is None:
                         LOGS_DIR.mkdir(parents=True, exist_ok=True)
                         stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         path = LOGS_DIR / f"data_{stamp}.jsonl"
-                        app["data_file"] = open(path, "w", encoding="utf-8")
-                        app["data_file_path"] = str(path)
+                        app["data_file"][0] = open(path, "w", encoding="utf-8")
+                        app["data_file_path"][0] = str(path)
                         print(_ts() + f"Session data file: {path}", file=sys.stderr)
-                    app["data_file"].write(out_line)
-                    app["data_file"].flush()
+                    app["data_file"][0].write(out_line)
+                    app["data_file"][0].flush()
             dead = set()
             for ws in app["websockets"]:
                 try:
@@ -191,8 +191,9 @@ def main():
         asyncio.create_task(warn_if_no_data(app))
 
     async def close_data_file(app):
-        if app.get("data_file") is not None and not app["data_file"].closed:
-            app["data_file"].close()
+        f = app.get("data_file")
+        if f is not None and f[0] is not None and not f[0].closed:
+            f[0].close()
 
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(close_data_file)
