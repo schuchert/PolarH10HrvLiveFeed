@@ -32,10 +32,10 @@
       gap: 0;
     }
     .header-left { display: flex; align-items: center; gap: 24px; }
-    .header-center { display: flex; justify-content: center; align-items: center; }
+    .header-center { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px; }
     .header-center button {
-      font-size: 0.85rem;
-      padding: 6px 12px;
+      font-size: 0.8rem;
+      padding: 6px 10px;
       border-radius: 6px;
       border: 1px solid rgba(255,255,255,0.3);
       background: rgba(255,255,255,0.1);
@@ -87,8 +87,13 @@
         <span class="num" id="hrVal">--</span>
       </div>
     </div>
-    <div class="header-center">
-      <button type="button" id="regionColorBtn">Region color: 1</button>
+    <div class="header-center" id="regionButtons">
+      <button type="button" data-category="0">Shaking</button>
+      <button type="button" data-category="1">Deep Flex</button>
+      <button type="button" data-category="2">Stretching</button>
+      <button type="button" data-category="3">Isometrics</button>
+      <button type="button" data-category="4">Yoga</button>
+      <button type="button" data-category="5">Warmup</button>
     </div>
     <div class="header-right">
       <div><span class="label">Start</span> <span class="value" id="startTime">--</span></div>
@@ -160,14 +165,14 @@
     const hrColor = '#f9a8d4';
 
     const regionColors = [
-      'rgba(173, 216, 230, 0.35)',
-      'rgba(144, 238, 144, 0.35)',
-      'rgba(255, 228, 181, 0.35)',
-      'rgba(255, 182, 193, 0.35)',
-      'rgba(221, 160, 221, 0.35)'
+      'rgba(173, 216, 230, 0.35)',   // Shaking
+      'rgba(144, 238, 144, 0.35)',   // Deep Flex
+      'rgba(255, 228, 181, 0.35)',   // Stretching
+      'rgba(255, 182, 193, 0.35)',   // Isometrics
+      'rgba(221, 160, 221, 0.35)',   // Yoga
+      'rgba(135, 206, 250, 0.35)'    // Warmup
     ];
     const regionSegments = [{ startIndex: 0, color: regionColors[0] }];
-    let regionColorIndex = 0;
 
     const regionBandsPlugin = {
       id: 'regionBands',
@@ -370,22 +375,18 @@
       tryReconnect();
     }, 5000);
 
-    function cycleRegionColor() {
+    function setRegionCategory(categoryIndex) {
       const n = data.t.length;
-      regionColorIndex = (regionColorIndex + 1) % 5;
-      regionSegments.push({ startIndex: n, color: regionColors[regionColorIndex] });
-      document.getElementById('regionColorBtn').textContent = 'Region color: ' + (regionColorIndex + 1);
+      regionSegments.push({ startIndex: n, color: regionColors[categoryIndex] });
       sectionStartMs = Date.now();
       if (sectionTimeEl) sectionTimeEl.textContent = '0:00';
       chart.update('none');
     }
-    document.getElementById('regionColorBtn').addEventListener('click', cycleRegionColor);
-    document.addEventListener('keydown', (e) => {
-      if (e.code !== 'Space' && e.key !== ' ') return;
-      const tag = document.activeElement?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
-      e.preventDefault();
-      cycleRegionColor();
+    document.getElementById('regionButtons').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-category]');
+      if (!btn) return;
+      const categoryIndex = parseInt(btn.getAttribute('data-category'), 10);
+      setRegionCategory(categoryIndex);
     });
 
     connect(false);
