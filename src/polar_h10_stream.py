@@ -142,9 +142,11 @@ async def _run(
     quiet: bool,
 ):
     first_packet = []
+    last_packet_time = [0.0]  # updated on every HRM packet; watchdog uses this
     hrm_queue = queue.Queue()
 
     def callback(sender, data):
+        last_packet_time[0] = time.time()
         try:
             hrm_queue.put_nowait((sender, bytes(data)))
         except queue.Full:
@@ -195,10 +197,18 @@ async def _run(
                 connect_time = time.time()
                 no_data_msg_shown = False
                 drain_task = asyncio.create_task(drain_hrm_queue())
+                NO_DATA_RECONNECT_SEC = 30  # if no HRM packet for this long (e.g. after sleep), force reconnect
                 try:
                     while True:
                         await asyncio.sleep(1)
-                        if not first_packet and (time.time() - connect_time) > 20 and not no_data_msg_shown:
+                        now = time.time()
+                        if first_packet and (now - last_packet_time[0]) > NO_DATA_RECONNECT_SEC:
+                            print(
+                                _ts() + f"No HRM data for {NO_DATA_RECONNECT_SEC}s (e.g. out of range or sleep). Reconnecting...",
+                                file=sys.stderr,
+                            )
+                            break
+                        if not first_packet and (now - connect_time) > 20 and not no_data_msg_shown:
                             no_data_msg_shown = True
                             print(
                                 _ts() + "No HRM packets yet. Strap on & moisten electrodes; try removing H10 from System Settings → Bluetooth and reconnect.",
@@ -241,10 +251,10 @@ async def _run(
             if reconnect_delay <= 0:
                 print(_ts() + "Exiting (reconnect disabled).", file=sys.stderr)
                 return 1
-            reconnect_count += 1
-            if max_reconnects > 0 and reconnect_count >= max_reconnects:
-                print(_ts() + f"Max reconnects ({max_reconnects}) reached. Exiting.", file=sys.stderr)
-                return 1
+        reconnect_count += 1
+        if max_reconnects > 0 and reconnect_count >= max_reconnects:
+            print(_ts() + f"Max reconnects ({max_reconnects}) reached. Exiting.", file=sys.stderr)
+            return 1
     return 0
 
 
