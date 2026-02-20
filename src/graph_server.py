@@ -25,6 +25,8 @@ except ImportError:
 
 # Directory containing static files (index.html)
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+# Directory for session data files (separate from log)
+LOGS_DIR = Path(__file__).resolve().parent.parent / "logs"
 # Max data points to keep and send to new clients
 MAX_HISTORY = 300
 
@@ -71,8 +73,27 @@ async def handle_ws(request: web.Request) -> web.StreamResponse:
         except Exception:
             break
     try:
-        async for _ in ws:
-            pass
+        async for msg in ws:
+            if msg.type != web.WSMsgType.TEXT:
+                continue
+            try:
+                obj = json.loads(msg.data)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if obj.get("event") != "region":
+                continue
+            region = obj.get("region")
+            ts = obj.get("ts")
+            if not region:
+                continue
+            request.app["current_region"] = region
+            # Append region marker to session data file
+            async with request.app["data_file_lock"]:
+                f = request.app.get("data_file")
+                if f is not None and not f.closed:
+                    line = json.dumps({"event": "region", "region": region, "ts": ts}) + "\n"
+                    f.write(line)
+                    f.flush()
     finally:
         request.app["websockets"].discard(ws)
     return ws
@@ -89,6 +110,10 @@ def main():
     app["history"] = []  # list of JSON strings
     app["queue"] = asyncio.Queue()
     app["stdin_count"] = [0]  # mutable so stdin_reader can increment
+    app["current_region"] = None
+    app["data_file"] = None
+    app["data_file_path"] = None
+    app["data_file_lock"] = asyncio.Lock()
 
     app.router.add_get("/", handle_index)
     app.router.add_get("/status", handle_status)
@@ -110,6 +135,24 @@ def main():
             history.append(line)
             if len(history) > MAX_HISTORY:
                 history.pop(0)
+            # Append to session data file (ts, hr, rmssd_ms, hrv_score, region)
+            try:
+                obj = json.loads(line)
+                obj["region"] = app["current_region"]
+                out_line = json.dumps(obj) + "\n"
+            except (json.JSONDecodeError, TypeError):
+                out_line = None
+            if out_line is not None:
+                async with app["data_file_lock"]:
+                    if app["data_file"] is None:
+                        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+                        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        path = LOGS_DIR / f"data_{stamp}.jsonl"
+                        app["data_file"] = open(path, "w", encoding="utf-8")
+                        app["data_file_path"] = str(path)
+                        print(_ts() + f"Session data file: {path}", file=sys.stderr)
+                    app["data_file"].write(out_line)
+                    app["data_file"].flush()
             dead = set()
             for ws in app["websockets"]:
                 try:
@@ -144,7 +187,12 @@ def main():
         app["broadcast_task"] = asyncio.create_task(consume_queue())
         asyncio.create_task(warn_if_no_data(app))
 
+    async def close_data_file(app):
+        if app.get("data_file") is not None and not app["data_file"].closed:
+            app["data_file"].close()
+
     app.on_startup.append(start_background_tasks)
+    app.on_cleanup.append(close_data_file)
 
     print(_ts() + f"Graph server: http://{args.host}:{args.port}", file=sys.stderr)
     print(

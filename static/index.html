@@ -164,6 +164,7 @@
     const hrvColor = '#6ee7b7';
     const hrColor = '#f9a8d4';
 
+    const regionLabels = ['Shaking', 'Deep Flex', 'Stretching', 'Isometrics', 'Yoga', 'Warmup'];
     const regionColors = [
       'rgba(173, 216, 230, 0.35)',   // Shaking
       'rgba(144, 238, 144, 0.35)',   // Deep Flex
@@ -381,6 +382,10 @@
       sectionStartMs = Date.now();
       if (sectionTimeEl) sectionTimeEl.textContent = '0:00';
       chart.update('none');
+      const region = regionLabels[categoryIndex];
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event: 'region', region: region, ts: Date.now() / 1000 }));
+      }
     }
     document.getElementById('regionButtons').addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-category]');
