@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HRV Live</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, sans-serif;
+      padding: 12px;
+      color: #e0e0e0;
+      background: #1a1a1a;
+    }
+    body.transparent { background: transparent; color: #fff; }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .live-value {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .live-value .label { font-size: 0.85rem; opacity: 0.85; }
+    .live-value .num { font-size: 3.5rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+    .live-value.hrv .num { color: #6ee7b7; }
+    .live-value.hr .num { color: #f9a8d4; }
+    .status { font-size: 0.85rem; opacity: 0.7; }
+    canvas { display: block; max-width: 100%; }
+    .chart-wrap { position: relative; height: 220px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="live-value hrv">
+      <span class="label">HRV (0–100)</span>
+      <span class="num" id="hrvVal">--</span>
+    </div>
+    <div class="live-value hr">
+      <span class="label">HR (bpm)</span>
+      <span class="num" id="hrVal">--</span>
+    </div>
+    <div class="status" id="status">Connecting...</div>
+  </div>
+  <div class="chart-wrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const transparent = params.get('transparent') === '1' || params.get('transparent') === 'true';
+    if (transparent) document.body.classList.add('transparent');
+
+    const hrvEl = document.getElementById('hrvVal');
+    const hrEl = document.getElementById('hrVal');
+    const statusEl = document.getElementById('status');
+
+    const maxPoints = 120;
+    const data = { t: [], hrv: [], hr: [] };
+
+    const gridColor = 'rgba(255, 255, 255, 0.15)';
+    const tickColor = '#b0b0b0';
+    const chart = new Chart(document.getElementById('chart'), {
+      type: 'line',
+      data: {
+        labels: [],
+        datasets: [
+          { label: 'HRV (0-100)', data: [], borderColor: '#6ee7b7', backgroundColor: 'rgba(110, 231, 183, 0.15)', fill: true, tension: 0.2, yAxisID: 'y' },
+          { label: 'HR (bpm)', data: [], borderColor: '#f9a8d4', backgroundColor: 'rgba(249, 168, 212, 0.1)', fill: true, tension: 0.2, yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { intersect: false, mode: 'index' },
+        plugins: {
+          legend: {
+            display: true,
+            labels: {
+              usePointStyle: true,
+              pointStyle: 'circle',
+              generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({
+                text: ds.label,
+                fillStyle: ds.borderColor,
+                strokeStyle: ds.borderColor,
+                color: ds.borderColor,
+                index: i,
+                datasetIndex: i
+              }))
+            }
+          }
+        },
+        scales: {
+          x: {
+            display: true,
+            title: { display: false },
+            ticks: { maxTicksLimit: 8, color: tickColor },
+            grid: { color: gridColor }
+          },
+          y: {
+            display: true,
+            min: 0,
+            max: 100,
+            title: { display: true, text: 'HRV', color: tickColor },
+            position: 'left',
+            ticks: { color: tickColor },
+            grid: { color: gridColor }
+          },
+          y1: {
+            display: true,
+            min: 40,
+            max: 120,
+            title: { display: true, text: 'HR', color: tickColor },
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            ticks: { color: tickColor }
+          }
+        }
+      }
+    });
+
+    const wsScheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = wsScheme + '//' + location.host + '/ws';
+    const ws = new WebSocket(wsUrl);
+
+    ws.onopen = () => { statusEl.textContent = 'Connected — waiting for data… (HRV needs ~30s of heartbeats)'; };
+    ws.onclose = () => { statusEl.textContent = 'Disconnected'; };
+    ws.onerror = () => { statusEl.textContent = 'WebSocket error'; };
+
+    let hasReceivedData = false;
+    ws.onmessage = (ev) => {
+      let obj;
+      try {
+        obj = JSON.parse(ev.data);
+      } catch (_) { return; }
+      const ts = obj.ts != null ? obj.ts : Date.now() / 1000;
+      const hrv = obj.hrv_score != null ? obj.hrv_score : null;
+      const hr = obj.hr != null ? obj.hr : null;
+
+      if (hrv != null) hrvEl.textContent = hrv;
+      if (hr != null) hrEl.textContent = hr;
+      if (!hasReceivedData && (hrv != null || hr != null)) {
+        hasReceivedData = true;
+        statusEl.textContent = 'Live';
+      }
+
+      data.t.push(ts);
+      data.hrv.push(hrv);
+      data.hr.push(hr);
+
+      while (data.t.length > maxPoints) {
+        data.t.shift();
+        data.hrv.shift();
+        data.hr.shift();
+      }
+
+      chart.data.labels = data.t.map((_, i) => i);
+      chart.data.datasets[0].data = data.hrv.slice();
+      chart.data.datasets[1].data = data.hr.slice();
+      chart.update('none');
+    };
+  </script>
+</body>
+</html>
