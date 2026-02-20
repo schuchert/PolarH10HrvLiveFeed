@@ -231,6 +231,11 @@ async def _run(
                 except asyncio.CancelledError:
                     pass
             print(_ts() + f"Connection lost: {e}", file=sys.stderr)
+            if "pairing" in str(e).lower() or "peer removed" in str(e).lower():
+                print(
+                    _ts() + "Tip: If you see 'Peer removed pairing', remove the H10 from System Settings → Bluetooth (Forget This Device), then try again.",
+                    file=sys.stderr,
+                )
             if not quiet:
                 traceback.print_exc(file=sys.stderr)
             if reconnect_delay <= 0:

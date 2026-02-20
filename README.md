@@ -51,7 +51,7 @@ Press Ctrl+C to stop.
 
 **Auto-reconnect:** If the BLE link drops (e.g. laptop sleep), the stream will wait 15s before the first reconnect (to give Bluetooth time to recover), then rescan and reconnect. Later reconnects use `--reconnect-delay` (default 5s). Use `--reconnect-delay 0` to disable, or `--max-reconnects N` to limit attempts.
 
-**macOS**: Grant Bluetooth access when prompted. The first time you run, ensure no other app is connected to the H10 (e.g. Polar Beat disconnected).
+**macOS**: Grant Bluetooth access when prompted. The first time you run, ensure no other app is connected to the H10 (e.g. Polar Beat disconnected). If you see **"Peer removed pairing information"** (common after the H10 was used with another device or pairing got out of sync), remove the H10 from **System Settings → Bluetooth** (Forget This Device), then run again so it can pair fresh.
 
 **"No Polar H10 found"?** The script retries scanning several times (see `--scan-retries`). Between attempts it prints tips: strap on and moisten the electrodes, quit Polar Beat (or any app using the H10), and ensure Bluetooth is on. If you use a specific device name, try without `--device` once to see if any H10 appears.
 
@@ -91,7 +91,7 @@ PYTHONPATH=. python -m src.polar_h10_stream | PYTHONPATH=. python -m src.hrv_cal
 
 **`run.sh`** keeps the laptop awake (`caffeinate -di`), runs the full pipeline, and exits cleanly on Ctrl+C.
 
-Then open **http://localhost:8765** in a browser. You’ll see a live chart of HRV (0–100) and HR, plus current values. **It may take up to several minutes** before HRV data appears (the pipeline needs enough RR intervals in the rolling window); the page will show “Connected” and then “Live” once data is flowing.
+Then open **http://localhost:8765** in a browser (do not start `graph_server` by itself — the run script already runs the full pipeline). You’ll see a live chart of HRV (0–100) and HR, plus current values. **It may take up to several minutes** before HRV data appears (the pipeline needs enough RR intervals in the rolling window); the page will show “Connected” and then “Live” once data is flowing.
 
 **OBS:** Add a **Browser Source** with URL `http://localhost:8765`. For a transparent overlay, use `http://localhost:8765?transparent=1` and in OBS set the browser source to use a transparent background (e.g. in the source’s Custom CSS, or in OBS browser settings).
 
