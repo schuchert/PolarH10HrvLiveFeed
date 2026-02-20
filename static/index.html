@@ -76,14 +76,15 @@
     const data = { t: [], hrv: [], hr: [] };
 
     const gridColor = 'rgba(255, 255, 255, 0.15)';
-    const tickColor = '#b0b0b0';
+    const hrvColor = '#6ee7b7';
+    const hrColor = '#f9a8d4';
     const chart = new Chart(document.getElementById('chart'), {
       type: 'line',
       data: {
         labels: [],
         datasets: [
-          { label: 'HRV (0-100)', data: [], borderColor: '#6ee7b7', backgroundColor: 'rgba(110, 231, 183, 0.15)', fill: true, tension: 0.2, yAxisID: 'y' },
-          { label: 'HR (bpm)', data: [], borderColor: '#f9a8d4', backgroundColor: 'rgba(249, 168, 212, 0.1)', fill: true, tension: 0.2, yAxisID: 'y1' }
+          { label: 'HRV (0–100)', data: [], borderColor: hrvColor, backgroundColor: 'rgba(110, 231, 183, 0.15)', fill: true, tension: 0.2, yAxisID: 'y' },
+          { label: 'HR (bpm)', data: [], borderColor: hrColor, backgroundColor: 'rgba(249, 168, 212, 0.1)', fill: true, tension: 0.2, yAxisID: 'y1' }
         ]
       },
       options: {
@@ -94,17 +95,21 @@
         plugins: {
           legend: {
             display: true,
+            position: 'top',
+            align: 'center',
             labels: {
               usePointStyle: true,
               pointStyle: 'circle',
-              generateLabels: (chart) => chart.data.datasets.map((ds, i) => ({
-                text: ds.label,
-                fillStyle: ds.borderColor,
-                strokeStyle: ds.borderColor,
-                color: ds.borderColor,
-                index: i,
-                datasetIndex: i
-              }))
+              padding: 16,
+              color: '#e0e0e0',
+              generateLabels: (chart) => {
+              // HRV first, HR second (match dataset order)
+              const order = [0, 1];
+              return order.map((i) => {
+                const ds = chart.data.datasets[i];
+                return { text: ds.label, fillStyle: ds.borderColor, strokeStyle: ds.borderColor, color: ds.borderColor, index: i, datasetIndex: i };
+              });
+            }
             }
           }
         },
@@ -112,26 +117,26 @@
           x: {
             display: true,
             title: { display: false },
-            ticks: { maxTicksLimit: 8, color: tickColor },
+            ticks: { maxTicksLimit: 8, color: '#b0b0b0' },
             grid: { color: gridColor }
           },
           y: {
             display: true,
             min: 0,
             max: 100,
-            title: { display: true, text: 'HRV', color: tickColor },
+            title: { display: true, text: 'HRV', color: hrvColor },
             position: 'left',
-            ticks: { color: tickColor },
+            ticks: { color: hrvColor },
             grid: { color: gridColor }
           },
           y1: {
             display: true,
             min: 40,
             max: 120,
-            title: { display: true, text: 'HR', color: tickColor },
+            title: { display: true, text: 'HR', color: hrColor },
             position: 'right',
             grid: { drawOnChartArea: false },
-            ticks: { color: tickColor }
+            ticks: { color: hrColor }
           }
         }
       }
