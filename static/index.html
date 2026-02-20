@@ -44,7 +44,37 @@
       position: relative;
       flex: 1;
       min-height: 180px;
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
     }
+    .chart-legends {
+      display: flex;
+      align-items: stretch;
+      flex: 1;
+      min-width: 0;
+    }
+    .legend-side {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      flex-shrink: 0;
+      padding: 4px 0;
+    }
+    .legend-side .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .legend-side .legend-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+    .legend-side .legend-dot.hrv { background: #6ee7b7; }
+    .legend-side .legend-dot.hr { background: #f9a8d4; }
+    .legend-side .legend-item.hrv { color: #6ee7b7; }
+    .legend-side .legend-item.hr { color: #f9a8d4; }
+    .chart-container { flex: 1; min-width: 0; min-height: 0; position: relative; }
+    .chart-container canvas { width: 100% !important; height: 100% !important; }
   </style>
 </head>
 <body>
@@ -60,7 +90,19 @@
     <div class="status" id="status">Connecting...</div>
   </div>
   <div class="chart-wrap">
-    <canvas id="chart"></canvas>
+    <div class="chart-legends">
+      <div class="legend-side legend-left">
+        <div class="legend-item hrv"><span class="legend-dot hrv"></span>HRV (0–100)</div>
+        <div class="legend-item hr"><span class="legend-dot hr"></span>HR (bpm)</div>
+      </div>
+      <div class="chart-container">
+        <canvas id="chart"></canvas>
+      </div>
+      <div class="legend-side legend-right">
+        <div class="legend-item hrv"><span class="legend-dot hrv"></span>HRV (0–100)</div>
+        <div class="legend-item hr"><span class="legend-dot hr"></span>HR (bpm)</div>
+      </div>
+    </div>
   </div>
 
   <script>
@@ -78,7 +120,7 @@
     const gridColor = 'rgba(255, 255, 255, 0.15)';
     const hrvColor = '#6ee7b7';
     const hrColor = '#f9a8d4';
-    const chart = new Chart(document.getElementById('chart'), {
+    const chart = new Chart(document.querySelector('.chart-container canvas'), {
       type: 'line',
       data: {
         labels: [],
@@ -93,25 +135,7 @@
         animation: false,
         interaction: { intersect: false, mode: 'index' },
         plugins: {
-          legend: {
-            display: true,
-            position: 'right',
-            align: 'center',
-            labels: {
-              usePointStyle: true,
-              pointStyle: 'circle',
-              padding: 16,
-              color: '#e0e0e0',
-              generateLabels: (chart) => {
-              // HRV first, HR second (match dataset order)
-              const order = [0, 1];
-              return order.map((i) => {
-                const ds = chart.data.datasets[i];
-                return { text: ds.label, fillStyle: ds.borderColor, strokeStyle: ds.borderColor, color: ds.borderColor, index: i, datasetIndex: i };
-              });
-            }
-            }
-          }
+          legend: { display: false }
         },
         scales: {
           x: {
