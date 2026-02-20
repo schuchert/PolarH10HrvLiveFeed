@@ -42,6 +42,17 @@
     .header-right .label { font-size: 0.75rem; opacity: 0.8; }
     .header-right .value { font-weight: 600; font-variant-numeric: tabular-nums; font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace; }
     .status { font-size: 0.85rem; opacity: 0.7; }
+    .chart-toolbar { margin-bottom: 6px; flex-shrink: 0; }
+    .chart-toolbar button {
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: inherit;
+      cursor: pointer;
+    }
+    .chart-toolbar button:hover { background: rgba(255,255,255,0.2); }
     canvas { display: block; max-width: 100%; }
     .chart-wrap {
       position: relative;
@@ -65,6 +76,9 @@
       <div><span class="label">Start</span> <span class="value" id="startTime">--</span></div>
       <div><span class="label">Running</span> <span class="value" id="runningTime">0:00</span></div>
     </div>
+  </div>
+  <div class="chart-toolbar">
+    <button type="button" id="regionColorBtn">Region color: 1</button>
   </div>
   <div class="chart-wrap">
     <canvas id="chart"></canvas>
@@ -117,6 +131,44 @@
     const gridColor = 'rgba(255, 255, 255, 0.15)';
     const hrvColor = '#6ee7b7';
     const hrColor = '#f9a8d4';
+
+    const regionColors = [
+      'rgba(173, 216, 230, 0.35)',
+      'rgba(144, 238, 144, 0.35)',
+      'rgba(255, 228, 181, 0.35)',
+      'rgba(255, 182, 193, 0.35)',
+      'rgba(221, 160, 221, 0.35)'
+    ];
+    const regionSegments = [{ startIndex: 0, color: regionColors[0] }];
+    let regionColorIndex = 0;
+
+    const regionBandsPlugin = {
+      id: 'regionBands',
+      beforeDraw(chart) {
+        const state = chart.options?.plugins?.regionBands;
+        if (!state?.segments?.length) return;
+        const { left, right, top, bottom } = chart.chartArea;
+        const xScale = chart.scales.x;
+        const dataLen = chart.data.labels?.length ?? 0;
+        if (dataLen === 0) return;
+        const ctx = chart.ctx;
+        for (let i = 0; i < state.segments.length; i++) {
+          const startIndex = state.segments[i].startIndex;
+          const endIndex = i + 1 < state.segments.length
+            ? state.segments[i + 1].startIndex
+            : dataLen;
+          if (startIndex >= endIndex) continue;
+          const xStart = xScale.getPixelForValue(startIndex);
+          const xEnd = xScale.getPixelForValue(endIndex);
+          ctx.save();
+          ctx.fillStyle = state.segments[i].color;
+          ctx.fillRect(xStart, top, xEnd - xStart, bottom - top);
+          ctx.restore();
+        }
+      }
+    };
+    Chart.register(regionBandsPlugin);
+
     const chart = new Chart(document.getElementById('chart'), {
       type: 'line',
       data: {
@@ -132,7 +184,10 @@
         animation: false,
         interaction: { intersect: false, mode: 'index' },
         plugins: {
-          legend: { display: false }
+          legend: { display: false },
+          regionBands: {
+            segments: regionSegments
+          }
         },
         scales: {
           x: {
@@ -254,6 +309,10 @@
         data.t.shift();
         data.hrv.shift();
         data.hr.shift();
+        for (const s of regionSegments) s.startIndex = Math.max(0, s.startIndex - 1);
+        while (regionSegments.length > 1 && regionSegments[1].startIndex <= regionSegments[0].startIndex) {
+          regionSegments.shift();
+        }
       }
 
       chart.data.labels = data.t.map((_, i) => i);
@@ -283,6 +342,22 @@
       if (document.visibilityState !== 'visible') return;
       tryReconnect();
     }, 5000);
+
+    function cycleRegionColor() {
+      const n = data.t.length;
+      regionColorIndex = (regionColorIndex + 1) % 5;
+      regionSegments.push({ startIndex: n, color: regionColors[regionColorIndex] });
+      document.getElementById('regionColorBtn').textContent = 'Region color: ' + (regionColorIndex + 1);
+      chart.update('none');
+    }
+    document.getElementById('regionColorBtn').addEventListener('click', cycleRegionColor);
+    document.addEventListener('keydown', (e) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || document.activeElement?.isContentEditable) return;
+      e.preventDefault();
+      cycleRegionColor();
+    });
 
     connect(false);
   </script>
