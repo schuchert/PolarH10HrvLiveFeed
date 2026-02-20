@@ -80,8 +80,16 @@ When there isn’t enough data yet (can take up to several minutes with default 
 Run the full pipeline and open the graph in a browser or OBS:
 
 ```bash
+./run.sh
+```
+
+Or run the pipeline manually (no caffeinate):
+
+```bash
 PYTHONPATH=. python -m src.polar_h10_stream | PYTHONPATH=. python -m src.hrv_calc | PYTHONPATH=. python -m src.graph_server --port 8765
 ```
+
+**`run.sh`** keeps the laptop awake (`caffeinate -di`), runs the full pipeline, and exits cleanly on Ctrl+C.
 
 Then open **http://localhost:8765** in a browser. You’ll see a live chart of HRV (0–100) and HR, plus current values. **It may take up to several minutes** before HRV data appears (the pipeline needs enough RR intervals in the rolling window); the page will show “Connected” and then “Live” once data is flowing.
 
