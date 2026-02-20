@@ -6,18 +6,20 @@ See [PLAN.md](PLAN.md) for the full design.
 
 ## Setup
 
-**Requires Python 3.14.** The project pins 3.14 so the same version works everywhere.
+**Requires Python 3.14.** The setup script ensures the correct version; if you create the venv by hand, use a 3.14 interpreter (e.g. `python3.14 -m venv .venv`).
 
-- **With pyenv:** `pyenv install 3.14` (if needed), then `cd` into this repo — `.python-version` selects 3.14.
-- **Without pyenv:** create the venv with 3.14 explicitly, e.g. `python3.14 -m venv .venv`.
+**One command (macOS/Linux):** from repo root run `./scripts/setup.sh`. It finds or installs Python 3.14, creates `.venv`, and installs deps. Then run `source .venv/bin/activate`.
 
-```bash
-python3.14 -m venv .venv   # or: python3 -m venv .venv if python3 is already 3.14
-source .venv/bin/activate   # or .venv\Scripts\activate on Windows
-pip install -r requirements-dev.txt
-```
+**Manual / Windows:**
 
-**If you moved or renamed the project** and get errors like `bad interpreter` or `no such file or directory` from `.venv`, delete the old venv and recreate it: `rm -rf .venv` then run the commands above again.
+1. **Install Python 3.14** (e.g. [python.org](https://www.python.org/downloads/), `pyenv install 3.14`, or Homebrew).
+2. **Create the venv with that interpreter** (do not use plain `python3` unless it’s already 3.14):
+   ```bash
+   rm -rf .venv
+   python3.14 -m venv .venv
+   ```
+   With **pyenv:** `pyenv install 3.14` then in this repo `python3 -m venv .venv` is enough (`.python-version` selects 3.14).
+3. Activate and install: `source .venv/bin/activate`, then `pip install -r requirements-dev.txt`. Run `python scripts/check_python.py` to confirm version.
 
 ## Run tests
 
