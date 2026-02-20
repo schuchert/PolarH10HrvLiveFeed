@@ -9,8 +9,13 @@ import argparse
 import json
 import sys
 from collections import deque
+from datetime import datetime
 
 from src.hrv import rmssd_ms, hrv_score
+
+
+def _ts():
+    return f"[{datetime.now().strftime('%H:%M:%S')}] "
 
 
 def _run(
@@ -20,12 +25,13 @@ def _run(
     # Rolling buffer: (rr_ms, ts) kept for the last window_sec
     buffer: deque[tuple[float, float]] = deque()
     latest_ts: float | None = None
+    first_hrv_emitted = False
 
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
-        if line.startswith("# "):
+        if line.startswith("#"):
             print(line, flush=True)
             continue
         try:
@@ -68,6 +74,9 @@ def _run(
             score = hrv_score(rms)
         except ValueError:
             continue
+        if not first_hrv_emitted:
+            print(_ts() + "First HRV score emitted.", file=sys.stderr)
+            first_hrv_emitted = True
         out = {
             "hr": hr,
             "rmssd_ms": round(rms, 2),

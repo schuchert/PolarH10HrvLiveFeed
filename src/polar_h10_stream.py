@@ -15,6 +15,7 @@ import asyncio
 import json
 import sys
 import time
+from datetime import datetime
 
 try:
     from bleak import BleakClient, BleakScanner
@@ -23,6 +24,10 @@ except ImportError:
     sys.exit(1)
 
 from src.gatt_hrm import parse_hrm
+
+
+def _ts():
+    return f"[{datetime.now().strftime('%H:%M:%S')}] "
 
 
 # GATT Heart Rate Measurement characteristic (standard 16-bit UUID)
@@ -51,26 +56,27 @@ async def _run(device_name: str | None, connect_timeout: float):
     if device_name:
         device = await BleakScanner.find_device_by_name(device_name)
         if device is None:
-            print(f"No device named '{device_name}' found.", file=sys.stderr)
+            print(_ts() + f"No device named '{device_name}' found.", file=sys.stderr)
             return 1
     else:
-        print("Scanning for Polar H10 (2 min)...", file=sys.stderr)
+        print(_ts() + "Scanning for Polar H10 (2 min)...", file=sys.stderr)
         devices = await BleakScanner.discover(timeout=120.0)
         polar = [d for d in devices if d.name and "Polar H10" in d.name]
         if not polar:
-            print("No Polar H10 found. Make sure the strap is on and in range.", file=sys.stderr)
+            print(_ts() + "No Polar H10 found. Make sure the strap is on and in range.", file=sys.stderr)
             return 1
         device = polar[0]
-        print(f"Using: {device.name} ({device.address})", file=sys.stderr)
+        print(_ts() + f"Using: {device.name} ({device.address})", file=sys.stderr)
 
-    print(f"Connecting (timeout {connect_timeout:.0f}s)...", file=sys.stderr)
+    print(_ts() + f"Connecting (timeout {connect_timeout:.0f}s)...", file=sys.stderr)
     def callback(sender, data):
         _on_hrm(sender, data, sys.stderr)
 
     async with BleakClient(device, timeout=connect_timeout) as client:
         await client.start_notify(HRM_CHAR_UUID, callback)
-        print("# connected", flush=True)
-        print("Streaming RR intervals (Ctrl+C to stop)...", file=sys.stderr)
+        t = datetime.now().strftime("%H:%M:%S")
+        print(f"# connected {t}", flush=True)
+        print(_ts() + "Streaming RR intervals (Ctrl+C to stop)...", file=sys.stderr)
         try:
             while True:
                 await asyncio.sleep(1)
@@ -92,7 +98,7 @@ def main():
     try:
         exit(asyncio.run(_run(args.device, args.connect_timeout)))
     except KeyboardInterrupt:
-        print("\nStopped.", file=sys.stderr)
+        print(_ts() + "Stopped.", file=sys.stderr)
         sys.exit(0)
 
 

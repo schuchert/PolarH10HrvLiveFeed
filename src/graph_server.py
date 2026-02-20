@@ -13,6 +13,7 @@ import asyncio
 import json
 import sys
 import threading
+from datetime import datetime
 from pathlib import Path
 
 try:
@@ -28,14 +29,18 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 MAX_HISTORY = 300
 
 
+def _ts():
+    return f"[{datetime.now().strftime('%H:%M:%S')}] "
+
+
 def stdin_reader(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop, received_count: list):
     """Run in thread: read lines from stdin, put into queue. received_count[0] = total lines."""
     for line in sys.stdin:
         line = line.strip()
         if not line:
             continue
-        if line.startswith("# "):
-            continue  # skip status lines for broadcast
+        if line.startswith("#"):
+            continue  # skip status lines (e.g. "# connected HH:MM:SS") for broadcast
         received_count[0] += 1
         asyncio.run_coroutine_threadsafe(queue.put(line), loop)
 
@@ -47,6 +52,12 @@ async def handle_index(request: web.Request) -> web.Response:
         return web.Response(text="static/index.html not found", status=404)
     body = index_path.read_text()
     return web.Response(content_type="text/html", text=body)
+
+
+async def handle_status(request: web.Request) -> web.Response:
+    """Return whether the server is receiving pipeline data (for debugging)."""
+    n = request.app["stdin_count"][0]
+    return web.json_response({"stdin_lines": n, "receiving": n > 0})
 
 
 async def handle_ws(request: web.Request) -> web.StreamResponse:
@@ -80,6 +91,7 @@ def main():
     app["stdin_count"] = [0]  # mutable so stdin_reader can increment
 
     app.router.add_get("/", handle_index)
+    app.router.add_get("/status", handle_status)
     app.router.add_get("/ws", handle_ws)
 
     async def consume_queue():
@@ -92,9 +104,9 @@ def main():
                 continue
             n = app["stdin_count"][0]
             if n == 1:
-                print("Receiving data from pipeline (first line).", file=sys.stderr)
+                print(_ts() + "Receiving data from pipeline (first line).", file=sys.stderr)
             elif n % 50 == 0 and n > 0:
-                print(f"Received {n} lines from pipeline.", file=sys.stderr)
+                print(_ts() + f"Received {n} lines from pipeline.", file=sys.stderr)
             history.append(line)
             if len(history) > MAX_HISTORY:
                 history.pop(0)
@@ -112,7 +124,7 @@ def main():
         await asyncio.sleep(10)
         if app["stdin_count"][0] == 0 and len(app["websockets"]) > 0:
             print(
-                "\n*** No data received on stdin. Run the FULL pipeline in ONE terminal:\n"
+                _ts() + "\n*** No data received on stdin. Run the FULL pipeline in ONE terminal:\n"
                 "  PYTHONPATH=. python -m src.polar_h10_stream | \\\n"
                 "  PYTHONPATH=. python -m src.hrv_calc | \\\n"
                 "  PYTHONPATH=. python -m src.graph_server --port 8765\n"
@@ -133,13 +145,13 @@ def main():
 
     app.on_startup.append(start_background_tasks)
 
-    print(f"Graph server: http://{args.host}:{args.port}", file=sys.stderr)
+    print(_ts() + f"Graph server: http://{args.host}:{args.port}", file=sys.stderr)
     print(
-        "This process must receive HRV data on stdin. Run the FULL pipeline in this terminal:",
+        _ts() + "This process must receive HRV data on stdin. Run the FULL pipeline in this terminal:",
         file=sys.stderr,
     )
     print(
-        "  PYTHONPATH=. python -m src.polar_h10_stream | "
+        _ts() + "  PYTHONPATH=. python -m src.polar_h10_stream | "
         "PYTHONPATH=. python -m src.hrv_calc | "
         "PYTHONPATH=. python -m src.graph_server -p " + str(args.port),
         file=sys.stderr,

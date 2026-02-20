@@ -6,8 +6,13 @@ See [PLAN.md](PLAN.md) for the full design.
 
 ## Setup
 
+**Requires Python 3.14.** The project pins 3.14 so the same version works everywhere.
+
+- **With pyenv:** `pyenv install 3.14` (if needed), then `cd` into this repo — `.python-version` selects 3.14.
+- **Without pyenv:** create the venv with 3.14 explicitly, e.g. `python3.14 -m venv .venv`.
+
 ```bash
-python3 -m venv .venv
+python3.14 -m venv .venv   # or: python3 -m venv .venv if python3 is already 3.14
 source .venv/bin/activate   # or .venv\Scripts\activate on Windows
 pip install -r requirements-dev.txt
 ```
@@ -62,7 +67,7 @@ Output includes `rmssd_ms` and `hrv_score` (1–100), e.g.:
 {"hr": 76, "rmssd_ms": 42.5, "hrv_score": 58, "ts": 1734567890.5}
 ```
 
-When there isn’t enough data yet, or when the stream sends `rr_ms: null`, you’ll get `"hrv_score": null` so downstream can show “N/A”.
+When there isn’t enough data yet (can take up to several minutes with default window/min-intervals), or when the stream sends `rr_ms: null`, you’ll get `"hrv_score": null` so downstream can show “N/A”.
 
 ## Step 3: Live graph (browser + OBS)
 
@@ -72,7 +77,7 @@ Run the full pipeline and open the graph in a browser or OBS:
 PYTHONPATH=. python -m src.polar_h10_stream | PYTHONPATH=. python -m src.hrv_calc | PYTHONPATH=. python -m src.graph_server --port 8765
 ```
 
-Then open **http://localhost:8765** in a browser. You’ll see a live chart of HRV (0–100) and HR, plus current values.
+Then open **http://localhost:8765** in a browser. You’ll see a live chart of HRV (0–100) and HR, plus current values. **It may take up to several minutes** before HRV data appears (the pipeline needs enough RR intervals in the rolling window); the page will show “Connected” and then “Live” once data is flowing.
 
 **OBS:** Add a **Browser Source** with URL `http://localhost:8765`. For a transparent overlay, use `http://localhost:8765?transparent=1` and in OBS set the browser source to use a transparent background (e.g. in the source’s Custom CSS, or in OBS browser settings).
 

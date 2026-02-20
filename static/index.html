@@ -141,9 +141,27 @@
     const wsUrl = wsScheme + '//' + location.host + '/ws';
     const ws = new WebSocket(wsUrl);
 
-    ws.onopen = () => { statusEl.textContent = 'Connected — waiting for data… (HRV needs ~30s of heartbeats)'; };
-    ws.onclose = () => { statusEl.textContent = 'Disconnected'; };
-    ws.onerror = () => { statusEl.textContent = 'WebSocket error'; };
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.style.color = isError ? '#fca5a5' : '';
+    }
+
+    ws.onopen = async () => {
+      setStatus('Connected — checking pipeline…');
+      try {
+        const r = await fetch('/status');
+        const s = await r.json();
+        if (s.receiving) {
+          setStatus('Connected — waiting for data… (HRV needs ~30s of heartbeats)');
+        } else {
+          setStatus('Connected — no data from pipeline. Run the full pipeline in one terminal; disconnect other apps (e.g. Polar Beat) from the H10.', true);
+        }
+      } catch (_) {
+        setStatus('Connected — waiting for data…');
+      }
+    };
+    ws.onclose = () => { setStatus('Disconnected'); };
+    ws.onerror = () => { setStatus('WebSocket error', true); };
 
     let hasReceivedData = false;
     ws.onmessage = (ev) => {
@@ -159,7 +177,7 @@
       if (hr != null) hrEl.textContent = hr;
       if (!hasReceivedData && (hrv != null || hr != null)) {
         hasReceivedData = true;
-        statusEl.textContent = 'Live';
+        setStatus('Live');
       }
 
       data.t.push(ts);
