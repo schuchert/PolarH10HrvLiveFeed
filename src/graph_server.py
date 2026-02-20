@@ -35,6 +35,34 @@ def _ts():
     return f"[{datetime.now().strftime('%H:%M:%S')}] "
 
 
+def _write_data_file_line_sync(
+    data_file_list: list,
+    data_file_path_list: list,
+    line: str,
+    logs_dir: Path,
+) -> str | None:
+    """Append line to session data file; create file if needed. Returns new file path if created, else None. Run in executor to avoid blocking the event loop."""
+    if data_file_list[0] is None:
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        path = logs_dir / f"data_{stamp}.jsonl"
+        data_file_list[0] = open(path, "w", encoding="utf-8")
+        data_file_path_list[0] = str(path)
+        data_file_list[0].write(line)
+        data_file_list[0].flush()
+        return str(path)
+    data_file_list[0].write(line)
+    data_file_list[0].flush()
+    return None
+
+
+def _append_data_file_line_sync(data_file_list: list, line: str) -> None:
+    """Append line to existing session data file. Run in executor."""
+    if data_file_list[0] is not None and not data_file_list[0].closed:
+        data_file_list[0].write(line)
+        data_file_list[0].flush()
+
+
 def stdin_reader(queue: asyncio.Queue, loop: asyncio.AbstractEventLoop, received_count: list):
     """Run in thread: read lines from stdin, put into queue. received_count[0] = total lines."""
     for line in sys.stdin:
@@ -92,11 +120,10 @@ async def handle_ws(request: web.Request) -> web.StreamResponse:
                 line = json.dumps({"event": "restart", "ts": ts}) + "\n"
             else:
                 continue
+            data_file_list = request.app["data_file"]
+            loop = asyncio.get_running_loop()
             async with request.app["data_file_lock"]:
-                f = request.app["data_file"][0]
-                if f is not None and not f.closed:
-                    f.write(line)
-                    f.flush()
+                await loop.run_in_executor(None, _append_data_file_line_sync, data_file_list, line)
     finally:
         request.app["websockets"].discard(ws)
     return ws
@@ -146,16 +173,18 @@ def main():
             except (json.JSONDecodeError, TypeError):
                 out_line = None
             if out_line is not None:
+                loop = asyncio.get_running_loop()
                 async with app["data_file_lock"]:
-                    if app["data_file"][0] is None:
-                        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-                        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                        path = LOGS_DIR / f"data_{stamp}.jsonl"
-                        app["data_file"][0] = open(path, "w", encoding="utf-8")
-                        app["data_file_path"][0] = str(path)
-                        print(_ts() + f"Session data file: {path}", file=sys.stderr)
-                    app["data_file"][0].write(out_line)
-                    app["data_file"][0].flush()
+                    new_path = await loop.run_in_executor(
+                        None,
+                        _write_data_file_line_sync,
+                        app["data_file"],
+                        app["data_file_path"],
+                        out_line,
+                        LOGS_DIR,
+                    )
+                if new_path is not None:
+                    print(_ts() + f"Session data file: {new_path}", file=sys.stderr)
             dead = set()
             for ws in app["websockets"]:
                 try:
