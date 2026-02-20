@@ -71,8 +71,10 @@
       position: relative;
       min-height: 180px;
     }
-    .chart-status { grid-column: 1 / -1; margin-top: 6px; }
+    .chart-status { grid-column: 1 / -1; margin-top: 6px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
     .chart-status .status { margin: 0; }
+    .chart-status .reconnect-link { font-size: 0.85rem; opacity: 0.9; }
+    .chart-status .status-hint { font-size: 0.8rem; opacity: 0.7; }
   </style>
 </head>
 <body>
@@ -107,7 +109,9 @@
     <canvas id="chart"></canvas>
   </div>
   <div class="chart-status">
-    <div class="status" id="status">Connecting...</div>
+    <span class="status" id="status">Connecting...</span>
+    <a href="#" id="reconnectLink" class="reconnect-link" style="display: none;">Reconnect</a>
+    <span class="status-hint" id="statusHint"></span>
   </div>
 
   <script>
@@ -273,13 +277,20 @@
 
     const wsScheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = wsScheme + '//' + location.host + '/ws';
-    const reconnectDelayMs = 3000;
+    const reconnectDelayMs = 1500;
     let ws = null;
     let reconnectTimeout = null;
+    const statusHintEl = document.getElementById('statusHint');
+    const reconnectLinkEl = document.getElementById('reconnectLink');
 
-    function setStatus(msg, isError) {
+    function setStatus(msg, isError, hint) {
       statusEl.textContent = msg;
       statusEl.style.color = isError ? '#fca5a5' : '';
+      statusHintEl.textContent = hint != null ? hint : '';
+    }
+
+    function setReconnectLinkVisible(show) {
+      reconnectLinkEl.style.display = show ? 'inline' : 'none';
     }
 
     function connect(isReconnect) {
@@ -287,7 +298,8 @@
       const socket = new WebSocket(wsUrl);
       ws = socket;
       socket.onopen = async () => {
-        setStatus('Connected — checking pipeline…');
+        setReconnectLinkVisible(false);
+        setStatus('Connected — checking pipeline…', false, '');
         try {
           const r = await fetch('/status');
           const s = await r.json();
@@ -306,11 +318,13 @@
       };
       socket.onclose = () => {
         if (ws !== socket) return;
-        setStatus('Disconnected. Reconnecting in ' + (reconnectDelayMs / 1000) + 's…');
+        setStatus('Disconnected.', false, 'Reconnecting in ' + (reconnectDelayMs / 1000) + 's — or click Reconnect. After sleep/walk-away, wait for pipeline to reconnect in the terminal first.');
+        setReconnectLinkVisible(true);
         stopSessionClock();
         clearTimeout(reconnectTimeout);
         reconnectTimeout = setTimeout(() => {
-          setStatus('Reconnecting…');
+          setStatus('Reconnecting…', false, '');
+          setReconnectLinkVisible(false);
           connect(true);
         }, reconnectDelayMs);
       };
@@ -364,12 +378,19 @@
         try { ws.close(); } catch (_) {}
         ws = null;
       }
-      setStatus('Reconnecting…');
+      setReconnectLinkVisible(false);
+      setStatus('Reconnecting…', false, '');
       connect(true);
     }
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
+      if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) return;
+      tryReconnect();
+    });
+
+    reconnectLinkEl.addEventListener('click', (e) => {
+      e.preventDefault();
       tryReconnect();
     });
 
