@@ -16,20 +16,23 @@
       padding: 12px;
       color: #e0e0e0;
       background: #1a1a1a;
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-rows: auto 1fr auto;
       min-height: 0;
+      gap: 0 0;
     }
     body.transparent { background: transparent; color: #fff; }
     .header {
-      display: flex;
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
       align-items: center;
       margin-bottom: 8px;
-      flex-shrink: 0;
       gap: 0;
     }
     .header-left { display: flex; align-items: center; gap: 24px; }
-    .header-center { flex: 1; display: flex; justify-content: center; align-items: center; min-width: 0; padding: 0 12px; }
+    .header-center { display: flex; justify-content: center; align-items: center; }
     .header-center button {
       font-size: 0.85rem;
       padding: 6px 12px;
@@ -46,7 +49,16 @@
       gap: 2px;
     }
     .live-value .label { font-size: 0.85rem; opacity: 0.85; }
-    .live-value .num { font-size: 3.5rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
+    .live-value .num {
+      font-size: 4.25rem;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+      min-width: 1.4em;
+      text-align: right;
+    }
     .live-value.hrv .num { color: #6ee7b7; }
     .live-value.hr .num { color: #f9a8d4; }
     .header-right { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: 0.9rem; opacity: 0.9; }
@@ -55,11 +67,11 @@
     .status { font-size: 0.85rem; opacity: 0.7; }
     canvas { display: block; max-width: 100%; }
     .chart-wrap {
+      grid-column: 1 / -1;
       position: relative;
-      flex: 1;
       min-height: 180px;
     }
-    .chart-status { flex-shrink: 0; margin-top: 6px; }
+    .chart-status { grid-column: 1 / -1; margin-top: 6px; }
     .chart-status .status { margin: 0; }
   </style>
 </head>
@@ -80,7 +92,8 @@
     </div>
     <div class="header-right">
       <div><span class="label">Start</span> <span class="value" id="startTime">--</span></div>
-      <div><span class="label">Running</span> <span class="value" id="runningTime">0:00</span></div>
+      <div><span class="label">Total</span> <span class="value" id="totalTime">0:00</span></div>
+      <div><span class="label">Running</span> <span class="value" id="sectionTime">0:00</span></div>
     </div>
   </div>
   <div class="chart-wrap">
@@ -99,11 +112,13 @@
     const hrEl = document.getElementById('hrVal');
     const statusEl = document.getElementById('status');
     const startTimeEl = document.getElementById('startTime');
-    const runningTimeEl = document.getElementById('runningTime');
+    const totalTimeEl = document.getElementById('totalTime');
+    const sectionTimeEl = document.getElementById('sectionTime');
 
     const maxPoints = 120;
     const data = { t: [], hrv: [], hr: [] };
     let sessionStartMs = null;
+    let sectionStartMs = null;
     let runningInterval = null;
 
     function formatStartTime(ms) {
@@ -118,20 +133,26 @@
     }
     function startSessionClock() {
       if (sessionStartMs != null) return;
-      sessionStartMs = Date.now();
+      const now = Date.now();
+      sessionStartMs = now;
+      sectionStartMs = now;
       startTimeEl.textContent = formatStartTime(sessionStartMs);
-      runningTimeEl.textContent = '0:00';
+      totalTimeEl.textContent = '0:00';
+      sectionTimeEl.textContent = '0:00';
       if (runningInterval) clearInterval(runningInterval);
       runningInterval = setInterval(() => {
         if (sessionStartMs == null) return;
-        runningTimeEl.textContent = formatRunning(Date.now() - sessionStartMs);
+        totalTimeEl.textContent = formatRunning(Date.now() - sessionStartMs);
+        if (sectionStartMs != null) sectionTimeEl.textContent = formatRunning(Date.now() - sectionStartMs);
       }, 1000);
     }
     function stopSessionClock() {
       if (runningInterval) { clearInterval(runningInterval); runningInterval = null; }
       sessionStartMs = null;
+      sectionStartMs = null;
       startTimeEl.textContent = '--';
-      runningTimeEl.textContent = '0:00';
+      totalTimeEl.textContent = '0:00';
+      sectionTimeEl.textContent = '0:00';
     }
 
     const gridColor = 'rgba(255, 255, 255, 0.15)';
@@ -354,6 +375,8 @@
       regionColorIndex = (regionColorIndex + 1) % 5;
       regionSegments.push({ startIndex: n, color: regionColors[regionColorIndex] });
       document.getElementById('regionColorBtn').textContent = 'Region color: ' + (regionColorIndex + 1);
+      sectionStartMs = Date.now();
+      if (sectionTimeEl) sectionTimeEl.textContent = '0:00';
       chart.update('none');
     }
     document.getElementById('regionColorBtn').addEventListener('click', cycleRegionColor);
