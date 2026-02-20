@@ -20,6 +20,7 @@ import sys
 import traceback
 import time
 from datetime import datetime
+from pathlib import Path
 
 try:
     from bleak import BleakClient, BleakScanner
@@ -41,6 +42,29 @@ def _verbose(quiet: bool, msg: str, file=sys.stderr):
 
 # GATT Heart Rate Measurement characteristic (standard 16-bit UUID)
 HRM_CHAR_UUID = "00002a37-0000-1000-8000-00805f9b34fb"
+
+# File to remember last connected H10 (project root)
+def _last_device_file() -> Path:
+    return Path(__file__).resolve().parent.parent / ".last_polar_h10"
+
+
+def _load_last_device() -> str | None:
+    """Return saved BLE address or None."""
+    p = _last_device_file()
+    if not p.is_file():
+        return None
+    try:
+        addr = p.read_text().strip()
+        return addr if addr else None
+    except OSError:
+        return None
+
+
+def _save_last_device(address: str) -> None:
+    try:
+        _last_device_file().write_text(address.strip() + "\n")
+    except OSError:
+        pass
 
 
 def _on_hrm(sender_handle: int, data: bytes, err_stream, first_packet_reported: list):
@@ -64,8 +88,11 @@ def _on_hrm(sender_handle: int, data: bytes, err_stream, first_packet_reported: 
         print(json.dumps({"error": str(e)}), file=err_stream, flush=True)
 
 
+LAST_DEVICE_TRY_TIMEOUT = 15.0  # seconds to try last-used H10 before full scan
+
+
 async def _find_device(device_name: str | None, quiet: bool):
-    """Resolve device name to a BleakDevice. Returns None if not found."""
+    """Resolve device name or last-used address to a BleakDevice. Returns None if not found."""
     if device_name:
         _verbose(quiet, f"Looking for device by name: {device_name!r}")
         device = await BleakScanner.find_device_by_name(device_name)
@@ -74,6 +101,16 @@ async def _find_device(device_name: str | None, quiet: bool):
             return None
         _verbose(quiet, f"Found device: {device.name} ({device.address})")
         return device
+    # No name given: try last-used device first for faster startup
+    last_addr = _load_last_device()
+    if last_addr:
+        _verbose(quiet, f"Trying last device {last_addr} ({LAST_DEVICE_TRY_TIMEOUT:.0f}s)...")
+        device = await BleakScanner.find_device_by_address(last_addr, timeout=LAST_DEVICE_TRY_TIMEOUT)
+        if device is not None:
+            _verbose(quiet, f"Found last device: {device.name} ({device.address})")
+            print(_ts() + f"Using: {device.name} ({device.address})", file=sys.stderr)
+            return device
+        _verbose(quiet, "Last device not found; falling back to full scan.")
     print(_ts() + "Scanning for Polar H10 (2 min)...", file=sys.stderr)
     devices = await BleakScanner.discover(timeout=120.0)
     polar = [d for d in devices if d.name and "Polar H10" in d.name]
@@ -153,6 +190,7 @@ async def _run(
                 await client.start_notify(HRM_CHAR_UUID, callback)
                 t = datetime.now().strftime("%H:%M:%S")
                 print(f"# connected {t}", flush=True)
+                _save_last_device(device.address)
                 print(_ts() + "Streaming RR intervals (Ctrl+C to stop). Reconnects on drop.", file=sys.stderr)
                 connect_time = time.time()
                 no_data_msg_shown = False

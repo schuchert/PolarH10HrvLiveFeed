@@ -21,3 +21,6 @@ env/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Last connected Polar H10 (faster startup)
+.last_polar_h10
