@@ -38,6 +38,9 @@
     .live-value .num { font-size: 3.5rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
     .live-value.hrv .num { color: #6ee7b7; }
     .live-value.hr .num { color: #f9a8d4; }
+    .header-right { margin-left: auto; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: 0.9rem; opacity: 0.9; }
+    .header-right .label { font-size: 0.75rem; opacity: 0.8; }
+    .header-right .value { font-weight: 600; font-variant-numeric: tabular-nums; font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace; }
     .status { font-size: 0.85rem; opacity: 0.7; }
     canvas { display: block; max-width: 100%; }
     .chart-wrap {
@@ -58,6 +61,10 @@
       <span class="num" id="hrVal">--</span>
     </div>
     <div class="status" id="status">Connecting...</div>
+    <div class="header-right">
+      <div><span class="label">Start</span> <span class="value" id="startTime">--</span></div>
+      <div><span class="label">Running</span> <span class="value" id="runningTime">0:00</span></div>
+    </div>
   </div>
   <div class="chart-wrap">
     <canvas id="chart"></canvas>
@@ -71,9 +78,41 @@
     const hrvEl = document.getElementById('hrvVal');
     const hrEl = document.getElementById('hrVal');
     const statusEl = document.getElementById('status');
+    const startTimeEl = document.getElementById('startTime');
+    const runningTimeEl = document.getElementById('runningTime');
 
     const maxPoints = 120;
     const data = { t: [], hrv: [], hr: [] };
+    let sessionStartMs = null;
+    let runningInterval = null;
+
+    function formatStartTime(ms) {
+      const d = new Date(ms);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    function formatRunning(ms) {
+      const totalSec = Math.floor(ms / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    function startSessionClock() {
+      if (sessionStartMs != null) return;
+      sessionStartMs = Date.now();
+      startTimeEl.textContent = formatStartTime(sessionStartMs);
+      runningTimeEl.textContent = '0:00';
+      if (runningInterval) clearInterval(runningInterval);
+      runningInterval = setInterval(() => {
+        if (sessionStartMs == null) return;
+        runningTimeEl.textContent = formatRunning(Date.now() - sessionStartMs);
+      }, 1000);
+    }
+    function stopSessionClock() {
+      if (runningInterval) { clearInterval(runningInterval); runningInterval = null; }
+      sessionStartMs = null;
+      startTimeEl.textContent = '--';
+      runningTimeEl.textContent = '0:00';
+    }
 
     const gridColor = 'rgba(255, 255, 255, 0.15)';
     const hrvColor = '#6ee7b7';
@@ -144,32 +183,51 @@
 
     const wsScheme = location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = wsScheme + '//' + location.host + '/ws';
-    const ws = new WebSocket(wsUrl);
+    const reconnectDelayMs = 3000;
+    let ws = null;
+    let reconnectTimeout = null;
 
     function setStatus(msg, isError) {
       statusEl.textContent = msg;
       statusEl.style.color = isError ? '#fca5a5' : '';
     }
 
-    ws.onopen = async () => {
-      setStatus('Connected — checking pipeline…');
-      try {
-        const r = await fetch('/status');
-        const s = await r.json();
-        if (s.receiving) {
-          setStatus('Connected — waiting for data… (HRV needs ~30s of heartbeats)');
-        } else {
-          setStatus('Connected — no data from pipeline. Run the full pipeline in one terminal; disconnect other apps (e.g. Polar Beat) from the H10.', true);
+    function connect() {
+      hasReceivedData = false;
+      ws = new WebSocket(wsUrl);
+      ws.onopen = async () => {
+        setStatus('Connected — checking pipeline…');
+        try {
+          const r = await fetch('/status');
+          const s = await r.json();
+          if (hasReceivedData) {
+            setStatus('Live');
+            return;
+          }
+          if (s.receiving) {
+            setStatus('Connected — waiting for data… (HRV needs ~30s of heartbeats)');
+          } else {
+            setStatus('Connected — no data from pipeline. Run the full pipeline in one terminal; disconnect other apps (e.g. Polar Beat) from the H10.', true);
+          }
+        } catch (_) {
+          if (!hasReceivedData) setStatus('Connected — waiting for data…');
         }
-      } catch (_) {
-        setStatus('Connected — waiting for data…');
-      }
-    };
-    ws.onclose = () => { setStatus('Disconnected'); };
-    ws.onerror = () => { setStatus('WebSocket error', true); };
+      };
+      ws.onclose = () => {
+        setStatus('Disconnected. Reconnecting in ' + (reconnectDelayMs / 1000) + 's…');
+        stopSessionClock();
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(() => {
+          setStatus('Reconnecting…');
+          connect();
+        }, reconnectDelayMs);
+      };
+      ws.onerror = () => { setStatus('WebSocket error. Reconnecting…', true); };
+      ws.onmessage = onWsMessage;
+    }
 
     let hasReceivedData = false;
-    ws.onmessage = (ev) => {
+    function onWsMessage(ev) {
       let obj;
       try {
         obj = JSON.parse(ev.data);
@@ -183,6 +241,7 @@
       if (!hasReceivedData && (hrv != null || hr != null)) {
         hasReceivedData = true;
         setStatus('Live');
+        startSessionClock();
       }
 
       data.t.push(ts);
@@ -199,7 +258,27 @@
       chart.data.datasets[0].data = data.hrv.slice();
       chart.data.datasets[1].data = data.hr.slice();
       chart.update('none');
-    };
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+      setStatus('Reconnecting…');
+      connect();
+    });
+
+    setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      if (ws && ws.readyState === WebSocket.OPEN) return;
+      clearTimeout(reconnectTimeout);
+      reconnectTimeout = null;
+      setStatus('Reconnecting…');
+      connect();
+    }, 5000);
+
+    connect();
   </script>
 </body>
 </html>
