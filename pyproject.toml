@@ -1,0 +1,6 @@
+[project]
+name = "polar-h10-hrv-live-feed"
+version = "0.1.0"
+description = "Polar H10 BLE → RR stream → HRV calc → live graph (OBS-ready)"
+readme = "README.md"
+requires-python = ">=3.14"
