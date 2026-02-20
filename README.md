@@ -53,6 +53,8 @@ Press Ctrl+C to stop.
 
 **macOS**: Grant Bluetooth access when prompted. The first time you run, ensure no other app is connected to the H10 (e.g. Polar Beat disconnected).
 
+**"No Polar H10 found"?** The script retries scanning several times (see `--scan-retries`). Between attempts it prints tips: strap on and moisten the electrodes, quit Polar Beat (or any app using the H10), and ensure Bluetooth is on. If you use a specific device name, try without `--device` once to see if any H10 appears.
+
 ## Step 2: HRV from RR stream (RMSSD + 0–100 score)
 
 Pipe the stream into `hrv_calc` to get rolling RMSSD and an **Elite HRV–style 0–100 score** (ln(RMSSD) mapped to 0–100):
