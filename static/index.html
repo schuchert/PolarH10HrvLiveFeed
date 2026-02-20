@@ -24,11 +24,22 @@
     .header {
       display: flex;
       align-items: center;
-      gap: 24px;
-      flex-wrap: wrap;
       margin-bottom: 8px;
       flex-shrink: 0;
+      gap: 0;
     }
+    .header-left { display: flex; align-items: center; gap: 24px; }
+    .header-center { flex: 1; display: flex; justify-content: center; align-items: center; min-width: 0; padding: 0 12px; }
+    .header-center button {
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.3);
+      background: rgba(255,255,255,0.1);
+      color: inherit;
+      cursor: pointer;
+    }
+    .header-center button:hover { background: rgba(255,255,255,0.2); }
     .live-value {
       display: flex;
       flex-direction: column;
@@ -38,50 +49,45 @@
     .live-value .num { font-size: 3.5rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; }
     .live-value.hrv .num { color: #6ee7b7; }
     .live-value.hr .num { color: #f9a8d4; }
-    .header-right { margin-left: auto; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: 0.9rem; opacity: 0.9; }
+    .header-right { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; font-size: 0.9rem; opacity: 0.9; }
     .header-right .label { font-size: 0.75rem; opacity: 0.8; }
     .header-right .value { font-weight: 600; font-variant-numeric: tabular-nums; font-family: ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace; }
     .status { font-size: 0.85rem; opacity: 0.7; }
-    .chart-toolbar { margin-bottom: 6px; flex-shrink: 0; }
-    .chart-toolbar button {
-      font-size: 0.85rem;
-      padding: 6px 12px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.3);
-      background: rgba(255,255,255,0.1);
-      color: inherit;
-      cursor: pointer;
-    }
-    .chart-toolbar button:hover { background: rgba(255,255,255,0.2); }
     canvas { display: block; max-width: 100%; }
     .chart-wrap {
       position: relative;
       flex: 1;
       min-height: 180px;
     }
+    .chart-status { flex-shrink: 0; margin-top: 6px; }
+    .chart-status .status { margin: 0; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="live-value hrv">
-      <span class="label">HRV (0–100)</span>
-      <span class="num" id="hrvVal">--</span>
+    <div class="header-left">
+      <div class="live-value hrv">
+        <span class="label">HRV (0–100)</span>
+        <span class="num" id="hrvVal">--</span>
+      </div>
+      <div class="live-value hr">
+        <span class="label">HR (bpm)</span>
+        <span class="num" id="hrVal">--</span>
+      </div>
     </div>
-    <div class="live-value hr">
-      <span class="label">HR (bpm)</span>
-      <span class="num" id="hrVal">--</span>
+    <div class="header-center">
+      <button type="button" id="regionColorBtn">Region color: 1</button>
     </div>
-    <div class="status" id="status">Connecting...</div>
     <div class="header-right">
       <div><span class="label">Start</span> <span class="value" id="startTime">--</span></div>
       <div><span class="label">Running</span> <span class="value" id="runningTime">0:00</span></div>
     </div>
   </div>
-  <div class="chart-toolbar">
-    <button type="button" id="regionColorBtn">Region color: 1</button>
-  </div>
   <div class="chart-wrap">
     <canvas id="chart"></canvas>
+  </div>
+  <div class="chart-status">
+    <div class="status" id="status">Connecting...</div>
   </div>
 
   <script>
