@@ -153,6 +153,7 @@ def main():
     app.router.add_get("/", handle_index)
     app.router.add_get("/status", handle_status)
     app.router.add_get("/ws", handle_ws)
+    app.router.add_static("/static", STATIC_DIR)
 
     async def consume_queue():
         queue = app["queue"]

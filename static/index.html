@@ -41,8 +41,16 @@
       background: rgba(255,255,255,0.1);
       color: inherit;
       cursor: pointer;
+      min-width: 6.5rem;
+      white-space: nowrap;
     }
     .header-center button:hover { background: rgba(255,255,255,0.2); }
+    .header-center button.region-btn {
+      display: flex; align-items: center; justify-content: center;
+      padding: 6px;
+    }
+    .header-center button.region-btn img { display: block; width: 24px; height: 24px; }
+    .header-center button.region-btn.current img { transform: scaleX(-1); }
     .live-value {
       display: flex;
       flex-direction: column;
@@ -90,12 +98,12 @@
       </div>
     </div>
     <div class="header-center" id="headerCenterGrid">
-      <button type="button" data-category="0">Shaking</button>
-      <button type="button" data-category="1">Deep Flex</button>
-      <button type="button" data-category="2">Stretching</button>
-      <button type="button" data-category="3">Isometrics</button>
-      <button type="button" data-category="4">Yoga</button>
-      <button type="button" data-category="5">Warmup</button>
+      <button type="button" class="region-btn current" data-category="0" title="Shaking"><img src="/static/gyroscope.png" alt="Shaking"></button>
+      <button type="button" class="region-btn" data-category="1" title="Deep Flex"><img src="/static/gyroscope.png" alt="Deep Flex"></button>
+      <button type="button" class="region-btn" data-category="2" title="Stretching"><img src="/static/gyroscope.png" alt="Stretching"></button>
+      <button type="button" class="region-btn" data-category="3" title="Isometrics"><img src="/static/gyroscope.png" alt="Isometrics"></button>
+      <button type="button" class="region-btn" data-category="4" title="Yoga"><img src="/static/gyroscope.png" alt="Yoga"></button>
+      <button type="button" class="region-btn" data-category="5" title="Warmup"><img src="/static/gyroscope.png" alt="Warmup"></button>
       <span></span>
       <button type="button" id="restartBtn">Restart</button>
     </div>
@@ -300,6 +308,7 @@
       socket.onopen = async () => {
         setReconnectLinkVisible(false);
         setStatus('Connected — checking pipeline…', false, '');
+        socket.send(JSON.stringify({ event: 'region', region: 'Shaking', ts: Date.now() / 1000 }));
         try {
           const r = await fetch('/status');
           const s = await r.json();
@@ -400,6 +409,9 @@
     }, 5000);
 
     function setRegionCategory(categoryIndex) {
+      document.querySelectorAll('.header-center button.region-btn').forEach((b, i) => {
+        b.classList.toggle('current', parseInt(b.getAttribute('data-category'), 10) === categoryIndex);
+      });
       const n = data.t.length;
       regionSegments.push({ startIndex: n, color: regionColors[categoryIndex] });
       sectionStartMs = Date.now();
