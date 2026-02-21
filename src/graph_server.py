@@ -259,7 +259,17 @@ def main():
         "PYTHONPATH=. python -m src.graph_server -p " + str(args.port),
         file=sys.stderr,
     )
-    web.run_app(app, host=args.host, port=args.port, print=None)
+    try:
+        web.run_app(app, host=args.host, port=args.port, print=None)
+    except OSError as e:
+        if e.errno == 48:  # errno.EADDRINUSE
+            print(
+                _ts() + f"Port {args.port} is already in use. "
+                "Stop the other process (e.g. lsof -i :" + str(args.port) + ") or use -p PORT.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        raise
     return 0
 
 
