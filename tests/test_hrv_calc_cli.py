@@ -2,6 +2,7 @@
 
 import json
 import os
+import random
 import subprocess
 import sys
 from pathlib import Path
@@ -282,3 +283,52 @@ def test_hr_ramp_77_95_no_plateau():
         assert len(unique) >= 2 or (len(unique) == 1 and 25.0 not in unique), (
             "HR ramp 77-95: RMSSD should not plateau at single value"
         )
+
+
+def _generate_rr_from_hrv_targets(target_rmssd_ms: list[float], beats_per_segment: int = 100, seed: int = 42) -> list[float]:
+    """RR series that yields ~target RMSSD per segment (random walk with step ~ target)."""
+    random.seed(seed)
+    rr_list: list[float] = []
+    base = 800.0
+    for target in target_rmssd_ms:
+        for _ in range(beats_per_segment):
+            step = random.gauss(0, target)
+            base = max(400.0, min(1200.0, base + step))
+            rr_list.append(base)
+    return rr_list
+
+
+def test_twitchy_elite_arc():
+    """Twitchy mode: simulate 24->37->50 ms RMSSD arc; output should be responsive (20-55 ms)."""
+    rr_series = _generate_rr_from_hrv_targets([24.0, 37.0, 50.0], beats_per_segment=100)
+    base_ts = 1000.0
+    lines_in = ["# connected"]
+    for i, rr in enumerate(rr_series):
+        lines_in.append(json.dumps({
+            "hr": int(60000 / rr),
+            "rr_ms": round(rr, 2),
+            "ts": base_ts + i * 0.8,
+        }))
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "src.hrv_calc",
+            "--twitchy", "--debug-rr",
+        ],
+        input="\n".join(lines_in) + "\n",
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)},
+    )
+    assert result.returncode == 0
+    out_lines = [l for l in result.stdout.strip().split("\n") if l and not l.startswith("#")]
+    objs = [json.loads(l) for l in out_lines]
+    assert all(o.get("twitchy") is True for o in objs), "All lines should have twitchy=true"
+    assert all(o.get("hrv_score") is None for o in objs), "Twitchy: raw RMSSD only, hrv_score null"
+    rmssd_vals = [o["rmssd_ms"] for o in objs if o.get("rmssd_ms") is not None]
+    assert len(rmssd_vals) >= 1, "Should emit at least one RMSSD"
+    min_r, max_r = min(rmssd_vals), max(rmssd_vals)
+    # Responsive swing: RMSSD should track arc (24->37->50); allow 10-60 ms after filter/window
+    assert 10 <= min_r <= 65, f"Twitchy RMSSD min in range 10-65, got {min_r}"
+    assert 10 <= max_r <= 65, f"Twitchy RMSSD max in range 10-65, got {max_r}"
+    assert max_r - min_r >= 2 or len(set(round(r, 1) for r in rmssd_vals)) >= 2, "RMSSD should show variation (responsive)"

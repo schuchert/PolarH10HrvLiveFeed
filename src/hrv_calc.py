@@ -51,8 +51,21 @@ def _run(
     interp_max_fallback: float,
     noise_dynamic: bool,
     window_adaptive: bool,
+    twitchy: bool = False,
 ):
-    # Rolling buffer: (rr_ms, ts, was_interpolated) for last window_sec
+    # Twitchy: Elite HRV preview — short window, light cleaning, raw RMSSD
+    if twitchy:
+        window_sec = 25.0
+        min_intervals = 15
+        min_beats = 15
+        interp_max_fallback = 0.25
+        window_adaptive = False
+        rr_clean = True
+        rr_clean_thresh = 0.5
+        rr_clean_grace = 15
+        rr_clean_hampel_sigma = 6.0
+        print(_ts() + "TWITCHY MODE: Elite preview sync", file=sys.stderr)
+
     buffer: deque[tuple[float, float, bool]] = deque()
     latest_ts: float | None = None
     first_hrv_emitted = False
@@ -77,7 +90,8 @@ def _run(
             buffer_maxlen=30,
             grace_beats=rr_clean_grace,
             interp_noise=not rr_clean_disable_interp_noise,
-            noise_dynamic=noise_dynamic,
+            noise_dynamic=noise_dynamic and not twitchy,
+            twitchy=twitchy,
             logger_instance=_log,
         )
 
@@ -97,6 +111,8 @@ def _run(
         ts = obj.get("ts")
         if rr_raw is None:
             out = {"hr": hr, "rmssd_ms": None, "hrv_score": None, "ts": ts, "last_rr_ms": last_cleaned_rr, "interp_ratio": last_interp_ratio}
+            if twitchy:
+                out["twitchy"] = True
             if debug_rr and rr_filter is not None:
                 s = rr_filter.stats()
                 out["filter_stats"] = {"dropped": s["dropped"], "interp": s["interpolated"]}
@@ -143,6 +159,8 @@ def _run(
         last_interp_ratio = round(interp_ratio, 3)
         if len(rr_list) < effective_min:
             out = {"hr": hr, "rmssd_ms": None, "hrv_score": None, "ts": ts, "last_rr_ms": last_cleaned_rr, "interp_ratio": last_interp_ratio}
+            if twitchy:
+                out["twitchy"] = True
             if rr_filter is not None:
                 s = rr_filter.stats()
                 out["rr_dropped"] = s["dropped"]
@@ -187,11 +205,13 @@ def _run(
         out = {
             "hr": hr,
             "rmssd_ms": round(rms_emit, 2) if rms_emit is not None else None,
-            "hrv_score": int(round(score)) if score is not None else None,
+            "hrv_score": None if twitchy else (int(round(score)) if score is not None else None),
             "ts": ts,
             "last_rr_ms": last_cleaned_rr,
             "interp_ratio": last_interp_ratio,
         }
+        if twitchy:
+            out["twitchy"] = True
         if rr_filter is not None:
             s = rr_filter.stats()
             out["rr_dropped"] = s["dropped"]
@@ -267,6 +287,7 @@ def main():
     parser.add_argument("--no-noise-dynamic", action="store_false", dest="noise_dynamic", help="Disable dynamic interpolation noise")
     parser.add_argument("--window-adaptive", action="store_true", default=True, help="Longer min window when interp_ratio high (default True)")
     parser.add_argument("--no-window-adaptive", action="store_false", dest="window_adaptive", help="Disable adaptive window")
+    parser.add_argument("--twitchy", action="store_true", help="Elite HRV preview: 25-beat window, light cleaning, raw RMSSD only")
     args = parser.parse_args()
     _run(
         window_sec=args.window,
@@ -290,6 +311,7 @@ def main():
         interp_max_fallback=args.interp_max_fallback,
         noise_dynamic=args.noise_dynamic,
         window_adaptive=args.window_adaptive,
+        twitchy=args.twitchy,
     )
 
 
