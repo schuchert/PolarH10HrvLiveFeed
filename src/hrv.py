@@ -8,6 +8,21 @@ idea with a linear map; exact calibration is proprietary.
 import math
 
 
+def filter_spikes(rr_ms: list[float], max_change_ms: float) -> list[float]:
+    """
+    Remove RR intervals that differ from the previous kept interval by more than max_change_ms.
+    Reduces movement/artifact spikes that inflate RMSSD. First interval is always kept.
+    Returns empty list if rr_ms is empty; needs at least 2 intervals for RMSSD after filtering.
+    """
+    if max_change_ms <= 0 or len(rr_ms) < 2:
+        return list(rr_ms)
+    out = [rr_ms[0]]
+    for i in range(1, len(rr_ms)):
+        if abs(rr_ms[i] - out[-1]) <= max_change_ms:
+            out.append(rr_ms[i])
+    return out
+
+
 def rmssd_ms(rr_ms: list[float]) -> float:
     """
     Root Mean Square of Successive Differences (in ms).

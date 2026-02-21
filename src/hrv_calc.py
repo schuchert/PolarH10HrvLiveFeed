@@ -11,7 +11,7 @@ import sys
 from collections import deque
 from datetime import datetime
 
-from src.hrv import rmssd_ms, hrv_score
+from src.hrv import filter_spikes, rmssd_ms, hrv_score
 
 
 def _ts():
@@ -21,6 +21,7 @@ def _ts():
 def _run(
     window_sec: float,
     min_intervals: int,
+    spike_filter_ms: float,
 ):
     # Rolling buffer: (rr_ms, ts) kept for the last window_sec
     buffer: deque[tuple[float, float]] = deque()
@@ -67,6 +68,8 @@ def _run(
             while len(buffer) > max_len:
                 buffer.popleft()
         rr_list = [b[0] for b in buffer]
+        if spike_filter_ms > 0:
+            rr_list = filter_spikes(rr_list, spike_filter_ms)
         if len(rr_list) < min_intervals:
             # Not enough for RMSSD yet — emit HR so graph shows heart rate immediately
             out = {"hr": hr, "rmssd_ms": None, "hrv_score": None, "ts": ts}
@@ -93,8 +96,19 @@ def main():
     parser = argparse.ArgumentParser(description="Compute rolling RMSSD and HRV score (0-100) from RR stream")
     parser.add_argument("--window", "-w", type=float, default=60.0, help="Rolling window in seconds (default 60)")
     parser.add_argument("--min-intervals", "-n", type=int, default=30, help="Min RR intervals before emitting (default 30)")
+    parser.add_argument(
+        "--spike-filter", "-s",
+        type=float,
+        default=200.0,
+        metavar="MS",
+        help="Drop RR intervals that differ from previous by more than MS ms (reduces movement spikes). Use 0 to disable (default 200)",
+    )
     args = parser.parse_args()
-    _run(window_sec=args.window, min_intervals=args.min_intervals)
+    _run(
+        window_sec=args.window,
+        min_intervals=args.min_intervals,
+        spike_filter_ms=args.spike_filter,
+    )
 
 
 if __name__ == "__main__":

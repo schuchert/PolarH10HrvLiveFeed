@@ -2,7 +2,29 @@
 
 import math
 import pytest
-from src.hrv import rmssd_ms, hrv_score
+from src.hrv import filter_spikes, rmssd_ms, hrv_score
+
+
+def test_filter_spikes_off():
+    """Spike filter 0 or negative returns copy."""
+    rr = [800.0, 840.0, 820.0]
+    assert filter_spikes(rr, 0) == rr
+    assert filter_spikes(rr, -1) == rr
+
+
+def test_filter_spikes_keeps_first():
+    """First interval is always kept."""
+    assert filter_spikes([900.0], 200) == [900.0]
+    assert filter_spikes([900.0, 500.0], 200) == [900.0]  # 500 differs >200 from 900
+
+
+def test_filter_spikes_removes_large_jump():
+    """Intervals that differ from previous kept by >threshold are dropped."""
+    # 800 -> 840 (40) ok; 840 -> 600 (240) drop 600 if threshold 200; 600 -> 620 (20) would need previous kept = 840, so 620 differs from 840 by 220, drop
+    # So with threshold 200: keep 800, 840; drop 600; keep 620? No - we compare to *last kept*, so after 840 we drop 600 (diff 240), then 620 vs 840 is 220 > 200 so drop. So we get [800, 840].
+    assert filter_spikes([800.0, 840.0, 600.0, 620.0], 200) == [800.0, 840.0]
+    # 800, 840, 850: all within 200 of previous kept -> [800, 840, 850]
+    assert filter_spikes([800.0, 840.0, 850.0], 200) == [800.0, 840.0, 850.0]
 
 
 def test_rmssd_two_intervals():

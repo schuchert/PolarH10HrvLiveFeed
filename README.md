@@ -66,6 +66,7 @@ PYTHONPATH=. python -m src.polar_h10_stream | PYTHONPATH=. python -m src.hrv_cal
 Options for `hrv_calc`:
 - `--window 60` — rolling window in seconds (default 60).
 - `--min-intervals 30` — minimum RR intervals before emitting (default 30).
+- `--spike-filter 200` — drop RR intervals that differ from the previous by more than 200 ms (reduces movement-artifact spikes that inflate HRV). Use `0` to disable (default 200).
 
 Output includes `rmssd_ms` and `hrv_score` (1–100), e.g.:
 
