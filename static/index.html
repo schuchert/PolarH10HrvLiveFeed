@@ -44,13 +44,27 @@
       min-width: 6.5rem;
       white-space: nowrap;
     }
-    .header-center button:hover { background: rgba(255,255,255,0.2); }
-    .header-center button.region-btn {
-      display: flex; align-items: center; justify-content: center;
-      padding: 6px;
+    .header-center button.region-btn { position: relative; }
+    .header-center button.region-btn:hover { filter: brightness(1.1); }
+    .header-center button.region-btn .gyro-icon {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scaleX(-1);
+      width: 28px;
+      height: 28px;
+      pointer-events: none;
     }
-    .header-center button.region-btn img { display: block; width: 24px; height: 24px; }
-    .header-center button.region-btn.current img { transform: scaleX(-1); }
+    .header-center button.region-btn.current .gyro-icon { display: block; }
+    .header-center button.region-btn.current span { visibility: hidden; }
+    .header-center button.region-btn.region-0 { background: rgba(173, 216, 230, 0.5); }
+    .header-center button.region-btn.region-1 { background: rgba(144, 238, 144, 0.5); }
+    .header-center button.region-btn.region-2 { background: rgba(255, 228, 181, 0.5); }
+    .header-center button.region-btn.region-3 { background: rgba(255, 182, 193, 0.5); }
+    .header-center button.region-btn.region-4 { background: rgba(221, 160, 221, 0.5); }
+    .header-center button.region-btn.region-5 { background: rgba(135, 206, 250, 0.5); }
+    #restartBtn:hover { background: rgba(255,255,255,0.2); }
     .live-value {
       display: flex;
       flex-direction: column;
@@ -98,12 +112,12 @@
       </div>
     </div>
     <div class="header-center" id="headerCenterGrid">
-      <button type="button" class="region-btn current" data-category="0" title="Shaking"><img src="/static/gyroscope.png" alt="Shaking"></button>
-      <button type="button" class="region-btn" data-category="1" title="Deep Flex"><img src="/static/gyroscope.png" alt="Deep Flex"></button>
-      <button type="button" class="region-btn" data-category="2" title="Stretching"><img src="/static/gyroscope.png" alt="Stretching"></button>
-      <button type="button" class="region-btn" data-category="3" title="Isometrics"><img src="/static/gyroscope.png" alt="Isometrics"></button>
-      <button type="button" class="region-btn" data-category="4" title="Yoga"><img src="/static/gyroscope.png" alt="Yoga"></button>
-      <button type="button" class="region-btn" data-category="5" title="Warmup"><img src="/static/gyroscope.png" alt="Warmup"></button>
+      <button type="button" class="region-btn region-0 current" data-category="0"><img class="gyro-icon" src="/static/gyroscope.png" alt=""><span>Shaking</span></button>
+      <button type="button" class="region-btn region-1" data-category="1"><img class="gyro-icon" src="/static/gyroscope.png" alt=""><span>Deep&nbsp;Flex</span></button>
+      <button type="button" class="region-btn region-2" data-category="2"><img class="gyro-icon" src="/static/gyroscope.png" alt=""><span>Stretching</span></button>
+      <button type="button" class="region-btn region-3" data-category="3"><img class="gyro-icon" src="/static/gyroscope.png" alt=""><span>Isometrics</span></button>
+      <button type="button" class="region-btn region-4" data-category="4"><img class="gyro-icon" src="/static/gyroscope.png" alt=""><span>Yoga</span></button>
+      <button type="button" class="region-btn region-5" data-category="5"><img class="gyro-icon" src="/static/gyroscope.png" alt=""><span>Warmup</span></button>
       <span></span>
       <button type="button" id="restartBtn">Restart</button>
     </div>
