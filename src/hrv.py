@@ -23,6 +23,24 @@ def filter_spikes(rr_ms: list[float], max_change_ms: float) -> list[float]:
     return out
 
 
+def smooth_spikes(rr_ms: list[float], max_change_ms: float) -> list[float]:
+    """
+    Cap each RR interval so its change from the previous is at most ±max_change_ms.
+    Same length as input; no gaps. Reduces movement-artifact spikes without dropping points.
+    """
+    if max_change_ms <= 0 or len(rr_ms) < 2:
+        return list(rr_ms)
+    out = [rr_ms[0]]
+    for i in range(1, len(rr_ms)):
+        prev = out[-1]
+        delta = rr_ms[i] - prev
+        if abs(delta) <= max_change_ms:
+            out.append(rr_ms[i])
+        else:
+            out.append(prev + math.copysign(max_change_ms, delta))
+    return out
+
+
 def rmssd_ms(rr_ms: list[float]) -> float:
     """
     Root Mean Square of Successive Differences (in ms).

@@ -66,7 +66,10 @@ PYTHONPATH=. python -m src.polar_h10_stream | PYTHONPATH=. python -m src.hrv_cal
 Options for `hrv_calc`:
 - `--window 60` — rolling window in seconds (default 60).
 - `--min-intervals 30` — minimum RR intervals before emitting (default 30).
-- `--spike-filter 200` — drop RR intervals that differ from the previous by more than 200 ms (reduces movement-artifact spikes that inflate HRV). Use `0` to disable (default 200).
+- `--smooth-output N` — sliding average of last N HRV scores (smooths the graph; spikes damp out). `0` = off (default).
+- `--window-short SEC` and `--blend R` — two-window mode: also compute RMSSD on the last SEC seconds and emit `R*score_short + (1-R)*score_long` so the display favors recent values (e.g. `--window-short 20 --blend 0.6`). After movement, the short window recovers first so the blend drops faster.
+- `--spike-filter MS` — optional RR spike smoothing (cap change to ±MS ms). `0` = off (default).
+- **RR artifact cleaning** (motion spikes): `--rr-clean` enables threshold + Hampel filter before RMSSD. Options: `--rr-clean-thresh 0.25`, `--rr-clean-hampel 11`, `--rr-clean-hampel-sigma 3.0`, `--rr-clean-min-rr 300`, `--rr-clean-max-rr 2000`. When enabled, output JSON includes `rr_dropped` and `rr_interpolated` counts.
 
 Output includes `rmssd_ms` and `hrv_score` (1–100), e.g.:
 

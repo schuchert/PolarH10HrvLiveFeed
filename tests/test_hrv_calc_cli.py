@@ -70,3 +70,28 @@ def test_hrv_calc_emits_rmssd_and_score_when_enough_intervals():
     assert "hrv_score" in obj
     assert 0 <= obj["hrv_score"] <= 100
     assert obj["rmssd_ms"] is not None
+
+
+def test_hrv_calc_rr_clean_adds_metrics():
+    """With --rr-clean, output includes rr_dropped and rr_interpolated."""
+    base_ts = 1000.0
+    lines_in = [
+        "# connected",
+        *[json.dumps({"hr": 70 + i, "rr_ms": 800.0 + i, "ts": base_ts + i}) for i in range(12)],
+    ]
+    result = subprocess.run(
+        [sys.executable, "-m", "src.hrv_calc", "--min-intervals", "2", "--window", "60", "--rr-clean"],
+        input="\n".join(lines_in) + "\n",
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)},
+    )
+    assert result.returncode == 0
+    out_lines = [l for l in result.stdout.strip().split("\n") if l and not l.startswith("#")]
+    assert len(out_lines) >= 1
+    obj = json.loads(out_lines[-1])
+    assert "rr_dropped" in obj
+    assert "rr_interpolated" in obj
+    assert isinstance(obj["rr_dropped"], int)
+    assert isinstance(obj["rr_interpolated"], int)

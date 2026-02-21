@@ -20,6 +20,6 @@ echo ""
 ( exec caffeinate -di env \
   PYTHONPATH="$ROOT" \
   "$PYTHON" -m src.polar_h10_stream \
-  | env PYTHONPATH="$ROOT" "$PYTHON" -m src.hrv_calc \
+  | env PYTHONPATH="$ROOT" "$PYTHON" -m src.hrv_calc --rr-clean \
   | env PYTHONPATH="$ROOT" "$PYTHON" -m src.graph_server --port 8765
 ) 2>&1 | tee "$LOG"

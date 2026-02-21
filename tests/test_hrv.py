@@ -2,7 +2,7 @@
 
 import math
 import pytest
-from src.hrv import filter_spikes, rmssd_ms, hrv_score
+from src.hrv import filter_spikes, rmssd_ms, hrv_score, smooth_spikes
 
 
 def test_filter_spikes_off():
@@ -25,6 +25,15 @@ def test_filter_spikes_removes_large_jump():
     assert filter_spikes([800.0, 840.0, 600.0, 620.0], 200) == [800.0, 840.0]
     # 800, 840, 850: all within 200 of previous kept -> [800, 840, 850]
     assert filter_spikes([800.0, 840.0, 850.0], 200) == [800.0, 840.0, 850.0]
+
+
+def test_smooth_spikes_caps_change():
+    """Smooth keeps same length; caps change to ±max_change_ms."""
+    # 800, 840 (40 ok), 600 (240 over 200 -> cap to 840-200=640), 620 (from 640, -20 ok) -> [800, 840, 640, 620]
+    assert smooth_spikes([800.0, 840.0, 600.0, 620.0], 200) == [800.0, 840.0, 640.0, 620.0]
+    assert smooth_spikes([800.0, 840.0, 850.0], 200) == [800.0, 840.0, 850.0]
+    assert smooth_spikes([100.0], 200) == [100.0]
+    assert smooth_spikes([100.0, 500.0], 200) == [100.0, 300.0]  # cap +200
 
 
 def test_rmssd_two_intervals():
