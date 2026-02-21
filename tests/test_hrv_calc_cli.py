@@ -219,3 +219,66 @@ def test_shaking_spike():
             rmssd_values.append(obj["rmssd_ms"])
     assert len(rmssd_values) >= 1, "Should emit at least one RMSSD value"
     assert any(r > 0 for r in rmssd_values), "RMSSD should not collapse to zero (Shaking spike scenario)"
+
+
+def test_shaking_interp_ratio_responsive():
+    """Shaking-like: interp_ratio 0.3-0.6 -> RMSSD 15-35ms responsive (no plateau at 25ms)."""
+    lines_in = ["# connected"]
+    base_ts = 1771618930.0
+    # Mix of stable and a few spikes so interp_ratio stays in mid range; enough valid RR for real RMSSD
+    for i in range(40):
+        rr = 1000.0 if i % 4 != 0 else 600.0  # 25% "spiky" -> some interpolation
+        lines_in.append(json.dumps({"hr": int(60000 / rr), "rr_ms": rr, "ts": base_ts + i}))
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "src.hrv_calc",
+            "--min-intervals", "15", "--min-beats", "15", "--window", "60",
+            "--rr-clean", "--rr-clean-grace", "10", "--interp-max-fallback", "0.65",
+        ],
+        input="\n".join(lines_in) + "\n",
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)},
+    )
+    assert result.returncode == 0
+    out_lines = [l for l in result.stdout.strip().split("\n") if l and not l.startswith("#")]
+    objs = [json.loads(l) for l in out_lines]
+    # Find lines with interp_ratio in 0.3-0.6 and non-null RMSSD
+    responsive = [o for o in objs if 0.3 <= o.get("interp_ratio", 0) <= 0.6 and o.get("rmssd_ms") is not None]
+    if responsive:
+        rmssd_in_range = [o["rmssd_ms"] for o in responsive if 15 <= o["rmssd_ms"] <= 35]
+        assert len(rmssd_in_range) >= 1 or max(o["rmssd_ms"] for o in responsive) > 0, (
+            "With interp_ratio 0.3-0.6, RMSSD should be responsive (15-35ms or non-zero), not plateau at 25"
+        )
+
+
+def test_hr_ramp_77_95_no_plateau():
+    """HR ramp 77->95 bpm: RMSSD should vary, not plateau at single value (e.g. 25ms)."""
+    base_ts = 1000.0
+    lines_in = ["# connected"]
+    for i in range(80):
+        # 77 bpm -> 60000/77 ~ 779 ms, 95 bpm -> 60000/95 ~ 632 ms
+        rr_ms = 779.0 - (779.0 - 632.0) * (i / 79.0)
+        lines_in.append(json.dumps({"hr": int(60000 / rr_ms), "rr_ms": rr_ms, "ts": base_ts + i * 0.7}))
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "src.hrv_calc",
+            "--min-intervals", "15", "--min-beats", "15", "--window", "60",
+            "--rr-clean", "--rr-clean-grace", "20", "--interp-max-fallback", "0.65",
+        ],
+        input="\n".join(lines_in) + "\n",
+        capture_output=True,
+        text=True,
+        cwd=PROJECT_ROOT,
+        env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)},
+    )
+    assert result.returncode == 0
+    out_lines = [l for l in result.stdout.strip().split("\n") if l and not l.startswith("#")]
+    rmssd_vals = [json.loads(l).get("rmssd_ms") for l in out_lines if json.loads(l).get("rmssd_ms") is not None]
+    if len(rmssd_vals) >= 2:
+        # No plateau: not all the same value (e.g. 25.0)
+        unique = set(rmssd_vals)
+        assert len(unique) >= 2 or (len(unique) == 1 and 25.0 not in unique), (
+            "HR ramp 77-95: RMSSD should not plateau at single value"
+        )

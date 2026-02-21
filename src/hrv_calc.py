@@ -48,6 +48,9 @@ def _run(
     rr_clean_max_rr: float,
     stats_interval_sec: float,
     debug_rr: bool,
+    interp_max_fallback: float,
+    noise_dynamic: bool,
+    window_adaptive: bool,
 ):
     # Rolling buffer: (rr_ms, ts, was_interpolated) for last window_sec
     buffer: deque[tuple[float, float, bool]] = deque()
@@ -60,7 +63,7 @@ def _run(
     score_history: deque[float] = deque(maxlen=smooth_output_n) if smooth_output_n > 0 else deque()
     rr_filter: RrArtifactFilter | None = None
     last_stats_time: float = 0.0
-    effective_min = max(min_intervals, min_beats)
+    base_effective_min = max(min_intervals, min_beats)
 
     if rr_clean:
         _log = logging.getLogger("src.hrv_calc")
@@ -74,6 +77,7 @@ def _run(
             buffer_maxlen=30,
             grace_beats=rr_clean_grace,
             interp_noise=not rr_clean_disable_interp_noise,
+            noise_dynamic=noise_dynamic,
             logger_instance=_log,
         )
 
@@ -104,6 +108,8 @@ def _run(
             continue
         was_interp = False
         if rr_filter is not None:
+            if noise_dynamic:
+                rr_filter.interp_ratio_hint = last_interp_ratio
             rr_val = rr_filter.process_rr(rr_val)
             if rr_val is None:
                 continue
@@ -128,6 +134,10 @@ def _run(
         interp_count = sum(1 for b in buffer if b[2])
         interp_ratio = (interp_count / len(buffer)) if buffer else 0.0
         valid_rr_count = len(buffer) - interp_count
+        if window_adaptive and rr_filter is not None:
+            effective_min = max(min_intervals, 25 + int(10 * interp_ratio))
+        else:
+            effective_min = base_effective_min
         if spike_filter_ms > 0:
             rr_list = smooth_spikes(rr_list, spike_filter_ms)
         last_interp_ratio = round(interp_ratio, 3)
@@ -142,8 +152,8 @@ def _run(
             _emit(json.dumps(out))
             continue
         # RMSSD safety (when rr_clean): high interp ratio or too few valid RRs -> last valid or N/A
-        if rr_filter is not None and (interp_ratio > 0.5 or valid_rr_count < 15):
-            if interp_ratio > 0.5 and last_valid_rmssd is not None:
+        if rr_filter is not None and (interp_ratio > interp_max_fallback or valid_rr_count < 15):
+            if interp_ratio > interp_max_fallback and last_valid_rmssd is not None:
                 rms_emit = last_valid_rmssd
                 score = last_valid_score if last_valid_score is not None else 0
             else:
@@ -166,7 +176,7 @@ def _run(
                     score_history.append(float(score))
                     score = sum(score_history) / len(score_history)
                 rms_emit = rms
-                if rr_filter is None or (interp_ratio <= 0.5 and valid_rr_count >= 15):
+                if rr_filter is None or (interp_ratio <= interp_max_fallback and valid_rr_count >= 15):
                     last_valid_rmssd = rms
                     last_valid_score = int(round(score))
             except ValueError:
@@ -252,6 +262,11 @@ def main():
     parser.add_argument("--rr-clean-max-rr", type=float, default=2200, metavar="MS", help="RR clean: max valid RR ms (default 2200)")
     parser.add_argument("--stats-interval", type=float, default=60.0, metavar="SEC", help="Print RR clean stats to stderr every SEC seconds when --rr-clean (0=off, default 60)")
     parser.add_argument("--debug-rr", action="store_true", help="Add last_rr_ms and filter_stats to every JSONL output line")
+    parser.add_argument("--interp-max-fallback", type=float, default=0.65, metavar="R", help="Use last valid RMSSD when interp_ratio > R (default 0.65)")
+    parser.add_argument("--noise-dynamic", action="store_true", default=True, help="Wider interpolation noise when interp_ratio high (default True)")
+    parser.add_argument("--no-noise-dynamic", action="store_false", dest="noise_dynamic", help="Disable dynamic interpolation noise")
+    parser.add_argument("--window-adaptive", action="store_true", default=True, help="Longer min window when interp_ratio high (default True)")
+    parser.add_argument("--no-window-adaptive", action="store_false", dest="window_adaptive", help="Disable adaptive window")
     args = parser.parse_args()
     _run(
         window_sec=args.window,
@@ -272,6 +287,9 @@ def main():
         rr_clean_max_rr=args.rr_clean_max_rr,
         stats_interval_sec=args.stats_interval if args.rr_clean else 0.0,
         debug_rr=args.debug_rr,
+        interp_max_fallback=args.interp_max_fallback,
+        noise_dynamic=args.noise_dynamic,
+        window_adaptive=args.window_adaptive,
     )
 
 
