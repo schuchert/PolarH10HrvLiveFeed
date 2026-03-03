@@ -189,11 +189,18 @@ async def _run(
         drain_task = None
         try:
             async with BleakClient(device, timeout=connect_timeout) as client:
+                # Short delay before subscribe: some H10/macOS setups need time after connect
+                await asyncio.sleep(1.5)
                 await client.start_notify(HRM_CHAR_UUID, callback)
                 t = datetime.now().strftime("%H:%M:%S")
                 print(f"# connected {t}", flush=True)
                 _save_last_device(device.address)
                 print(_ts() + "Streaming RR intervals (Ctrl+C to stop). Reconnects on drop.", file=sys.stderr)
+                if not quiet:
+                    print(
+                        _ts() + "macOS: The H10 often does not appear in System Settings → Bluetooth when using this app; that is normal.",
+                        file=sys.stderr,
+                    )
                 connect_time = time.time()
                 no_data_msg_shown = False
                 drain_task = asyncio.create_task(drain_hrm_queue())
@@ -211,7 +218,11 @@ async def _run(
                         if not first_packet and (now - connect_time) > 20 and not no_data_msg_shown:
                             no_data_msg_shown = True
                             print(
-                                _ts() + "No HRM packets yet. Strap on & moisten electrodes; try removing H10 from System Settings → Bluetooth and reconnect.",
+                                _ts() + "No HRM packets yet. Quit Elite HRV and any other app using the H10, then try again.",
+                                file=sys.stderr,
+                            )
+                            print(
+                                _ts() + "Or: System Settings → Bluetooth → remove (Forget) the Polar H10, strap on with moist electrodes, then run ./run.sh again.",
                                 file=sys.stderr,
                             )
                 except asyncio.CancelledError:
